@@ -8,17 +8,17 @@ const OLLAMA_MODEL        = process.env.OLLAMA_MODEL        || "llama3.2:latest"
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || "llava:latest";
 
 // ── Non-streaming (kept for /analyze) ────────────────────────────────────────
-async function analyze(image, prompt, mode = "online") {
+async function analyze(image, prompt, mode = "online", systemPrompt = null) {
   if (image) {
     return mode === "offline"
-      ? await callOllamaVisionModel(image, prompt)
-      : await callGeminiModel(image, prompt);
+      ? await callOllamaVisionModel(image, prompt, systemPrompt)
+      : await callGeminiModel(image, prompt, systemPrompt);
   }
-  return await callOllamaModel(prompt);
+  return await callOllamaModel(prompt, systemPrompt);
 }
 
 // ── Streaming entry point (/analyze-stream) ───────────────────────────────────
-async function analyzeStream(image, prompt, mode = "online", expressRes) {
+async function analyzeStream(image, prompt, mode = "online", systemPrompt = null, expressRes) {
   // SSE headers
   expressRes.setHeader("Content-Type", "text/event-stream");
   expressRes.setHeader("Cache-Control", "no-cache");
@@ -29,15 +29,15 @@ async function analyzeStream(image, prompt, mode = "online", expressRes) {
   try {
     if (image) {
       if (mode === "offline") {
-        await streamOllamaVision(image, prompt, expressRes);
+        await streamOllamaVision(image, prompt, systemPrompt, expressRes);
       } else {
         // Gemini: get full response then emit as one event
-        const text = await callGeminiModel(image, prompt);
+        const text = await callGeminiModel(image, prompt, systemPrompt);
         sendSSE(expressRes, { token: text, done: true });
         expressRes.end();
       }
     } else {
-      await streamOllamaText(prompt, expressRes);
+      await streamOllamaText(prompt, systemPrompt, expressRes);
     }
   } catch (err) {
     if (!expressRes.writableEnded) {
@@ -48,14 +48,14 @@ async function analyzeStream(image, prompt, mode = "online", expressRes) {
 }
 
 // ── Streaming: Ollama text (llama3.2) ─────────────────────────────────────────
-async function streamOllamaText(prompt, expressRes) {
+async function streamOllamaText(prompt, systemPrompt, expressRes) {
   let axiosRes;
   try {
     axiosRes = await axios.post(
       `${OLLAMA_BASE}/api/generate`,
       {
         model: OLLAMA_MODEL,
-        prompt: buildPrompt(prompt),
+        prompt: buildPrompt(prompt, systemPrompt),
         stream: true,
         options: { temperature: 0.2, num_predict: 4096 }  // ← increased
       },
@@ -68,7 +68,7 @@ async function streamOllamaText(prompt, expressRes) {
 }
 
 // ── Streaming: Ollama vision (llava) ──────────────────────────────────────────
-async function streamOllamaVision(image, prompt, expressRes) {
+async function streamOllamaVision(image, prompt, systemPrompt, expressRes) {
   const base64Data = extractBase64(image);
   let axiosRes;
   try {
@@ -76,7 +76,7 @@ async function streamOllamaVision(image, prompt, expressRes) {
       `${OLLAMA_BASE}/api/generate`,
       {
         model: OLLAMA_VISION_MODEL,
-        prompt: buildPrompt(prompt),
+        prompt: buildPrompt(prompt, systemPrompt),
         images: [base64Data],
         stream: true,
         options: { temperature: 0.2, num_predict: 2048 }  // ← increased
@@ -133,13 +133,13 @@ function pipeOllamaStream(stream, expressRes) {
 }
 
 // ── Non-streaming model calls (for /analyze) ──────────────────────────────────
-async function callGeminiModel(image, prompt) {
+async function callGeminiModel(image, prompt, systemPrompt) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw createError("GEMINI_API_KEY is missing in .env.", 500);
 
   const { mimeType, base64Data } = parseImageData(image);
   const parts = [
-    { text: buildPrompt(prompt) },
+    { text: buildPrompt(prompt, systemPrompt) },
     { inlineData: { mimeType, data: base64Data } }
   ];
 
@@ -162,14 +162,14 @@ async function callGeminiModel(image, prompt) {
   }
 }
 
-async function callOllamaVisionModel(image, prompt) {
+async function callOllamaVisionModel(image, prompt, systemPrompt) {
   const base64Data = extractBase64(image);
   try {
     const res = await axios.post(
       `${OLLAMA_BASE}/api/generate`,
       {
         model: OLLAMA_VISION_MODEL,
-        prompt: buildPrompt(prompt),
+        prompt: buildPrompt(prompt, systemPrompt),
         images: [base64Data],
         stream: false,
         options: { temperature: 0.2, num_predict: 2048 }
@@ -184,13 +184,13 @@ async function callOllamaVisionModel(image, prompt) {
   }
 }
 
-async function callOllamaModel(prompt) {
+async function callOllamaModel(prompt, systemPrompt) {
   try {
     const res = await axios.post(
       `${OLLAMA_BASE}/api/generate`,
       {
         model: OLLAMA_MODEL,
-        prompt: buildPrompt(prompt),
+        prompt: buildPrompt(prompt, systemPrompt),
         stream: false,
         options: { temperature: 0.7, num_predict: 4096 }
       },
@@ -220,14 +220,16 @@ function extractBase64(image) {
   return match ? match[1] : (image.split(",").pop() || image);
 }
 
-function buildPrompt(userPrompt) {
-  return `You are an expert tutor helping a student.
+function buildPrompt(userPrompt, systemPrompt) {
+  const sys = systemPrompt ? systemPrompt : `You are an expert tutor helping a student.
 
 Default behavior:
 - Be concise but complete. Use bullet points or numbered steps where helpful.
 - Match response length to the complexity of the question. Don't add unnecessary filler.
 
-If the user explicitly asks to "elaborate", "explain in detail", "step-by-step", or "more details", provide a thorough response.
+If the user explicitly asks to "elaborate", "explain in detail", "step-by-step", or "more details", provide a thorough response.`;
+
+  return `${sys}
 
 User request: ${userPrompt}`;
 }

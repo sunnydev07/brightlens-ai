@@ -19,13 +19,13 @@ const upload = multer({ dest: uploadDir });
 
 app.post("/analyze", async (req, res) => {
   try {
-    const { image, prompt, mode } = req.body ?? {};
+    const { image, prompt, mode, systemPrompt } = req.body ?? {};
 
     if (!image && !prompt) {
       return res.status(400).json({ error: "Missing image or prompt." });
     }
 
-    const result = await analyze(image, prompt, mode);
+    const result = await analyze(image, prompt, mode, systemPrompt);
 
     // Save to database without blocking the response.
     save(prompt, result);
@@ -47,13 +47,13 @@ app.post("/analyze", async (req, res) => {
 // ── Streaming endpoint (SSE) ──────────────────────────────────────────────────
 app.post("/analyze-stream", async (req, res) => {
   try {
-    const { image, prompt, mode } = req.body ?? {};
+    const { image, prompt, mode, systemPrompt } = req.body ?? {};
 
     if (!image && !prompt) {
       return res.status(400).json({ error: "Missing image or prompt." });
     }
 
-    await analyzeStream(image, prompt, mode, res);
+    await analyzeStream(image, prompt, mode, systemPrompt, res);
 
     // Save prompt to DB after stream completes
     save(prompt, "[streamed]");
