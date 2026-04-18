@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+coverage/
+.vite/
+
+# Environment files
+.env
+.env.*
+*.local
+
+# Runtime data
+*.log
+*.db
+server/uploads/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Misc
+.claude/
