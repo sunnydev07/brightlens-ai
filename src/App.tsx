@@ -9,10 +9,12 @@ function App() {
   const [speechLoading, setSpeechLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState("");
+  const [imageMode, setImageMode] = useState<"online" | "offline">("online"); // online = Gemini, offline = llava
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const speechTextRef = useRef("");
+  const imageModeRef = useRef<"online" | "offline">("online");
   const streamRef = useRef<MediaStream | null>(null);
   const isRecordingRef = useRef(false);
   const hotkeyActiveRef = useRef(false);
@@ -70,6 +72,11 @@ function App() {
   useEffect(() => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
+
+  // Keep ref in sync so the Electron capture closure always reads the latest mode
+  useEffect(() => {
+    imageModeRef.current = imageMode;
+  }, [imageMode]);
 
   const startRecording = useCallback(async () => {
     if (isRecordingRef.current) {
@@ -199,7 +206,8 @@ function App() {
 
         const res = await axios.post("http://localhost:5000/analyze", {
           image: base64,
-          prompt: buildAnalyzePrompt(speechTextRef.current)
+          prompt: buildAnalyzePrompt(speechTextRef.current),
+          mode: imageModeRef.current   // ← use ref, not stale state
         });
 
         setResponse(res.data.result);
@@ -214,11 +222,12 @@ function App() {
         setError(
           backendMessage
           || (status === 400 ? "Invalid request payload." : "")
-          || (status === 401 ? "Gemini API key is missing or invalid." : "")
-          || (status === 402 ? "Gemini billing or quota issue." : "")
-          || (status === 429 ? "Gemini rate limit reached. Try again shortly." : "")
+          || (status === 401 ? "API key is missing or invalid." : "")
+          || (status === 402 ? "API billing or quota issue." : "")
+          || (status === 429 ? "Rate limit reached. Try again shortly." : "")
           || (status === 500 ? "Server error while analyzing the capture." : "")
-          || (status === 503 ? "Gemini service is unavailable." : "")
+          || (status === 503 ? "AI service unavailable. Make sure Ollama is running (ollama serve)." : "")
+          || (status === 504 ? "AI model timed out. Try again in a moment." : "")
           || (!status ? "Backend not reachable. Start with: npm run server" : "")
           || fallbackMessage
           || "Failed to capture or analyze image"
@@ -299,6 +308,64 @@ function App() {
     <div style={{ padding: "20px", color: "white", minHeight: "100vh", backgroundColor: "#1a1a2e" }}>
       <h1 style={{ marginBottom: "10px" }}>brightlens AI</h1>
       <p style={{ color: "#888", marginBottom: "20px" }}>Press Ctrl+Shift+S to capture screen</p>
+
+      {/* Vision Model Toggle */}
+      <div style={{
+        marginBottom: "16px",
+        padding: "12px 16px",
+        borderRadius: "10px",
+        backgroundColor: "rgba(255,255,255,0.05)",
+        display: "flex",
+        alignItems: "center",
+        gap: "14px",
+        flexWrap: "wrap"
+      }}>
+        <span style={{ fontSize: "13px", color: "#aaa", fontWeight: 500 }}>📷 Image Vision:</span>
+
+        <div style={{ display: "flex", borderRadius: "8px", overflow: "hidden", border: "1px solid #444" }}>
+          <button
+            onClick={() => setImageMode("online")}
+            style={{
+              padding: "6px 16px",
+              fontSize: "13px",
+              fontWeight: 600,
+              border: "none",
+              cursor: "pointer",
+              backgroundColor: imageMode === "online" ? "#7c3aed" : "#1e1e35",
+              color: imageMode === "online" ? "#fff" : "#888",
+              transition: "all 0.2s"
+            }}
+          >
+            🌐 Online (Gemini)
+          </button>
+          <button
+            onClick={() => setImageMode("offline")}
+            style={{
+              padding: "6px 16px",
+              fontSize: "13px",
+              fontWeight: 600,
+              border: "none",
+              borderLeft: "1px solid #444",
+              cursor: "pointer",
+              backgroundColor: imageMode === "offline" ? "#059669" : "#1e1e35",
+              color: imageMode === "offline" ? "#fff" : "#888",
+              transition: "all 0.2s"
+            }}
+          >
+            🦙 Offline (llava)
+          </button>
+        </div>
+
+        <span style={{
+          fontSize: "11px",
+          color: imageMode === "offline" ? "#6ee7b7" : "#c4b5fd",
+          fontStyle: "italic"
+        }}>
+          {imageMode === "offline"
+            ? "Running locally — no internet needed"
+            : "Using Google Gemini API"}
+        </span>
+      </div>
 
       <div style={{ marginBottom: "20px", padding: "12px", borderRadius: "8px", backgroundColor: "rgba(255,255,255,0.05)" }}>
         <p style={{ margin: 0, fontWeight: "500" }}>🎤 Push-to-Talk: Hold <kbd style={{ 

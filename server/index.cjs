@@ -19,13 +19,13 @@ const upload = multer({ dest: uploadDir });
 
 app.post("/analyze", async (req, res) => {
   try {
-    const { image, prompt } = req.body ?? {};
+    const { image, prompt, mode } = req.body ?? {};
 
     if (!image && !prompt) {
       return res.status(400).json({ error: "Missing image or prompt." });
     }
 
-    const result = await analyze(image, prompt);
+    const result = await analyze(image, prompt, mode);
 
     // Save to database without blocking the response.
     save(prompt, result);
