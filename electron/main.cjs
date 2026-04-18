@@ -26,8 +26,12 @@ function restoreWindowAfterCapture() {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 400,
-    height: 600,
+    width: 450,
+    height: 750,
+    frame: false,
+    transparent: true,
+    titleBarStyle: 'hiddenInset',
+    backgroundColor: '#00000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs')
     }
@@ -41,6 +45,12 @@ app.whenReady().then(() => {
 
   ipcMain.on('SCREEN_CAPTURE_DONE', () => {
     restoreWindowAfterCapture();
+  });
+
+  ipcMain.on('close-app', () => {
+    if (win) {
+      win.close();
+    }
   });
 
   const doScreenCapture = async () => {

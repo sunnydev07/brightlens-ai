@@ -19,7 +19,7 @@
   letter-spacing: 0.18px;
   color-scheme: light dark;
   color: var(--text);
-  background: var(--bg);
+  background: transparent;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -34,7 +34,7 @@
   :root {
     --text: #9ca3af;
     --text-h: #f3f4f6;
-    --bg: #16171d;
+    --bg: transparent; /* Changed from #16171d */
     --border: #2e303a;
     --code-bg: #1f2028;
     --accent: #c084fc;
@@ -51,19 +51,23 @@
 }
 
 #root {
-  width: 1126px;
+  width: 100%;
   max-width: 100%;
   margin: 0 auto;
   text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  background: transparent;
 }
 
 body {
   margin: 0;
+  background: transparent;
+  overflow: hidden; /* Prevent native scrollbars around the frameless window */
 }
 
 h1,

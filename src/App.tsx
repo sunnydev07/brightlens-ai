@@ -25,6 +25,10 @@ async function streamAnalyze(
   let buffer = "";
 
   while (true) {
+    if (signal?.aborted) {
+      reader.cancel();
+      break;
+    }
     const { done, value } = await reader.read();
     if (done) break;
 
@@ -120,7 +124,9 @@ function App() {
     }
   }, [response, loading]);
 
-  const stopGeneration = useCallback(() => {
+  const stopGeneration = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -343,324 +349,358 @@ function App() {
 
   // ── UI ────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: "20px", color: "white", minHeight: "100vh", backgroundColor: "#1a1a2e", fontFamily: "system-ui, sans-serif" }}>
-      <h1 style={{ marginBottom: "4px", fontSize: "22px" }}>brightlens AI</h1>
-      <p style={{ color: "#555", marginBottom: "20px", fontSize: "13px" }}>Press Ctrl+Shift+S to capture screen</p>
-
-      {/* Vision toggle */}
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "16px", height: "100vh", overflow: "hidden", backgroundColor: "transparent", boxSizing: "border-box", fontFamily: "system-ui, sans-serif" }}>
+      
+      {/* GLOBAL CONTROL PILL */}
       <div style={{
-        marginBottom: "16px", padding: "10px 14px", borderRadius: "10px",
-        backgroundColor: "rgba(255,255,255,0.05)",
-        display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap"
-      }}>
-        <span style={{ fontSize: "12px", color: "#888" }}>📷 Vision:</span>
-        <div style={{ display: "flex", borderRadius: "6px", overflow: "hidden", border: "1px solid #333" }}>
-          <button onClick={() => setImageMode("online")} style={{
-            padding: "5px 14px", fontSize: "12px", fontWeight: 600, border: "none", cursor: "pointer",
-            backgroundColor: imageMode === "online" ? "#7c3aed" : "#1e1e35",
-            color: imageMode === "online" ? "#fff" : "#666", transition: "all 0.2s"
-          }}>🌐 Online (Gemini)</button>
-          <button onClick={() => setImageMode("offline")} style={{
-            padding: "5px 14px", fontSize: "12px", fontWeight: 600, border: "none",
-            borderLeft: "1px solid #333", cursor: "pointer",
-            backgroundColor: imageMode === "offline" ? "#059669" : "#1e1e35",
-            color: imageMode === "offline" ? "#fff" : "#666", transition: "all 0.2s"
-          }}>🦙 Offline (llava)</button>
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "8px 16px", borderRadius: "50px", 
+        backgroundColor: "rgba(30, 30, 35, 0.75)", backdropFilter: "blur(24px)",
+        boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        WebkitAppRegion: "drag", // Makes it draggable
+        position: "relative", zIndex: 50
+      } as React.CSSProperties}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+           {/* Application icon (minimal) */}
+           <div style={{ width: "26px", height: "26px", borderRadius: "8px", background: "linear-gradient(135deg, #7c3aed, #ec4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: "bold", color: "#fff", boxShadow: "0 2px 10px rgba(124, 58, 237, 0.4)" }}>B</div>
+           
+           {/* Recording Action Button */}
+           <button
+             onMouseDown={startRecording} onMouseUp={stopRecording}
+             onTouchStart={startRecording} onTouchEnd={stopRecording}
+             style={{
+               display: "flex", alignItems: "center", gap: "8px",
+               padding: "6px 14px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.05)",
+               backgroundColor: isRecording ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)",
+               color: isRecording ? "#fca5a5" : "#eee", fontSize: "13px", fontWeight: 500, cursor: "pointer",
+               transition: "all 0.2s"
+             }}
+           >
+              <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: isRecording ? "#ef4444" : "#10b981", boxShadow: isRecording ? "0 0 10px #ef4444" : "0 0 10px #10b981", animation: isRecording ? "blink 1.5s infinite" : "none" }} />
+              {isRecording ? "Stop Recording" : "Start Listening"}
+           </button>
+           
+
         </div>
-        <span style={{ fontSize: "11px", color: imageMode === "offline" ? "#6ee7b7" : "#c4b5fd", fontStyle: "italic" }}>
-          {imageMode === "offline" ? "Runs locally — no internet" : "Uses Google Gemini API"}
-        </span>
+        
+        {/* Close Button */}
+        <button 
+          onClick={(e) => { e.preventDefault(); window.electronAPI?.closeApp?.(); }}
+          style={{
+            WebkitAppRegion: "no-drag",
+            width: "28px", height: "28px", borderRadius: "50%", border: "none", 
+            backgroundColor: "transparent", color: "#aaa", fontSize: "14px",
+            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            transition: "all 0.2s"
+          } as React.CSSProperties}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.2)"; e.currentTarget.style.color = "#fca5a5"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#aaa"; }}
+        >
+          ✕
+        </button>
       </div>
 
-      {/* Unified question input */}
+      {/* INTEGRATED CONTENT AREA */}
       <div style={{
-        marginBottom: "12px", borderRadius: "12px", border: "1px solid #2a2a45",
-        backgroundColor: "rgba(255,255,255,0.04)", overflow: "hidden"
-      }}>
-        <textarea
-          id="question-input"
-          value={questionText}
-          onChange={e => setQuestionText(e.target.value)}
-          onKeyDown={e => {
-            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); handleAskText(); }
-          }}
-          placeholder={
-            speechLoading ? "Transcribing audio..."
-            : isRecording ? "🔴 Recording... release Shift to stop"
-            : "Type your question, or hold Shift / click 🎤 to record audio..."
-          }
-          disabled={speechLoading}
-          rows={3}
-          style={{
-            width: "100%", background: "transparent", border: "none", outline: "none",
-            color: speechLoading ? "#7dd3fc" : isRecording ? "#f97316" : "white",
-            fontSize: "14px", padding: "14px 16px", resize: "none",
-            boxSizing: "border-box", fontFamily: "inherit", lineHeight: "1.5"
-          }}
-        />
+        display: "flex", flexDirection: "column", flex: 1, padding: "20px",
+        borderRadius: "24px", backgroundColor: "rgba(30, 30, 35, 0.65)",
+        backdropFilter: "blur(30px)", border: "1px solid rgba(255,255,255,0.08)",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.4)", overflow: "hidden",
+        WebkitAppRegion: "no-drag"
+      } as React.CSSProperties}>
+
+        {/* Sleek Vision Segmented Control */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "24px" }}>
+           <div style={{ display: "flex", backgroundColor: "rgba(0,0,0,0.4)", borderRadius: "14px", padding: "4px", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.5)" }}>
+             <button onClick={() => setImageMode("online")} style={{
+               padding: "6px 16px", borderRadius: "10px", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+               backgroundColor: imageMode === "online" ? "rgba(255,255,255,0.15)" : "transparent",
+               color: imageMode === "online" ? "#fff" : "#777", transition: "all 0.2s",
+               boxShadow: imageMode === "online" ? "0 2px 8px rgba(0,0,0,0.2)" : "none"
+             }}>🌐 Gemini (Online)</button>
+             <button onClick={() => setImageMode("offline")} style={{
+               padding: "6px 16px", borderRadius: "10px", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+               backgroundColor: imageMode === "offline" ? "rgba(255,255,255,0.15)" : "transparent",
+               color: imageMode === "offline" ? "#fff" : "#777", transition: "all 0.2s",
+               boxShadow: imageMode === "offline" ? "0 2px 8px rgba(0,0,0,0.2)" : "none"
+             }}>🦙 LlaVA (Local)</button>
+           </div>
+        </div>
+
+        {/* Dynamic Context Visualizer */}
+        {(loading || speechLoading) && !response && (
+          <div style={{ 
+            padding: "20px", borderRadius: "16px", backgroundColor: "rgba(0,0,0,0.3)", 
+            border: "1px dashed rgba(255,255,255,0.15)", display: "flex", flexDirection: "column", 
+            alignItems: "center", justifyContent: "center", gap: "12px", marginBottom: "20px" 
+          }}>
+            <div style={{ width: "32px", height: "32px", borderRadius: "50%", border: "3px solid rgba(124, 58, 237, 0.3)", borderTopColor: "#7c3aed", animation: "spin 1s linear infinite" }} />
+            <span style={{ fontSize: "13px", color: "#a78bfa", fontWeight: 500 }}>
+              {speechLoading ? "Listening & Transcribing..." : image ? "Analyzing Visual Context..." : "Processing Command..."}
+            </span>
+          </div>
+        )}
+
+        {/* Screenshot preview if provided */}
+        {image && !loading && (
+          <div style={{ marginBottom: "20px", position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
+            <img src={image} alt="Captured context" style={{ width: "100%", display: "block" }} />
+            <div style={{ position: "absolute", bottom: "8px", right: "8px", padding: "4px 8px", backgroundColor: "rgba(0,0,0,0.6)", borderRadius: "6px", fontSize: "11px", color: "#ddd" }}>Visual Context Attached</div>
+          </div>
+        )}
+
+        {/* Chat / Response Area */}
+        {response && (
+          <div style={{
+            padding: "16px 20px", borderRadius: "16px", fontSize: "14px",
+            backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+            lineHeight: "1.6", textAlign: "left", flex: 1, overflowY: "auto", marginBottom: "20px",
+            boxShadow: "inset 0 2px 10px rgba(0,0,0,0.2)"
+          }}>
+            <ReactMarkdown
+              components={{
+                p: ({node, ...props}) => <p style={{margin: "0 0 1em 0", color: "#e2e8f0"}} {...props} />,
+                pre: ({node, ...props}) => <pre style={{backgroundColor: "rgba(0,0,0,0.4)", padding: "16px", borderRadius: "10px", overflowX: "auto", margin: "1em 0", border: "1px solid rgba(255,255,255,0.1)"}} {...props} />,
+                code: ({node, inline, className, ...props}: any) => <code style={{backgroundColor: inline ? "rgba(255,255,255,0.1)" : "transparent", padding: inline ? "2px 6px" : 0, borderRadius: "6px", fontFamily: "ui-monospace, Consolas, monospace", fontSize: "0.9em"}} className={className} {...props} />,
+                ul: ({node, ...props}) => <ul style={{listStyleType: "disc", paddingLeft: "24px", marginBottom: "1em", color: "#cbd5e1"}} {...props} />,
+                ol: ({node, ...props}) => <ol style={{listStyleType: "decimal", paddingLeft: "24px", marginBottom: "1em", color: "#cbd5e1"}} {...props} />,
+                li: ({node, ...props}) => <li style={{marginBottom: "0.4em"}} {...props} />,
+                h1: ({node, ...props}) => <h1 style={{fontSize: "1.4em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#fff"}} {...props} />,
+                h2: ({node, ...props}) => <h2 style={{fontSize: "1.2em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#f8fafc"}} {...props} />,
+                h3: ({node, ...props}) => <h3 style={{fontSize: "1.1em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#f1f5f9"}} {...props} />,
+                a: ({node, ...props}) => <a style={{color: "#8b5cf6", textDecoration: "none", fontWeight: 500}} {...props} />
+              }}
+            >
+              {response + (loading ? " ▌" : "")}
+            </ReactMarkdown>
+            <div ref={bottomRef} style={{ height: "1px" }} />
+          </div>
+        )}
+
+        {/* Spacer if empty to push input to bottom */}
+        {!response && !loading && <div style={{ flex: 1 }} />}
+
+        {/* Input Area */}
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "8px 12px", borderTop: "1px solid rgba(255,255,255,0.05)", gap: "8px", flexWrap: "wrap"
+          borderRadius: "16px", border: "1px solid rgba(255,255,255,0.1)",
+          backgroundColor: "rgba(0,0,0,0.3)", overflow: "visible", position: "relative",
+          boxShadow: "inset 0 4px 10px rgba(0,0,0,0.1)"
         }}>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-            
-            {/* New UI Buttons from Screenshot */}
-            <button
-               onClick={(e) => {
-                 e.preventDefault();
-                 if (window.electronAPI?.requestScreenCapture) {
-                   window.electronAPI.requestScreenCapture();
-                 } else {
-                   setError("Screen capture only works in Electron app.");
-                 }
-               }}
-               style={{
-                 display: "flex", alignItems: "center", gap: "6px",
-                 padding: "6px 12px", borderRadius: "20px", border: "1px solid #333",
-                 backgroundColor: "rgba(255,255,255,0.05)", color: "#aaa", fontSize: "13px",
-                 cursor: "pointer", transition: "all 0.2s"
-               }}
-               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"}
-               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"}
-            >
-              🖼️ Use Screen
-            </button>
-
-            <button
-               style={{
-                 display: "flex", alignItems: "center", gap: "6px",
-                 padding: "6px 12px", borderRadius: "20px", border: "1px solid #333",
-                 backgroundColor: "rgba(255,255,255,0.05)", color: "#aaa", fontSize: "13px",
-                 cursor: "pointer", transition: "all 0.2s"
-               }}
-               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"}
-               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"}
-            >
-              ⚡ Smart
-            </button>
-
-            <div style={{ position: "relative" }}>
+          <textarea
+            id="question-input"
+            value={questionText}
+            onChange={e => setQuestionText(e.target.value)}
+            onKeyDown={e => {
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); handleAskText(); }
+            }}
+            placeholder="Ask about your screen..."
+            disabled={speechLoading}
+            rows={2}
+            style={{
+              width: "100%", background: "transparent", border: "none", outline: "none",
+              color: "white",
+              fontSize: "14px", padding: "16px 16px 44px 16px", resize: "none",
+              boxSizing: "border-box", fontFamily: "inherit", lineHeight: "1.5"
+            }}
+          />
+          {/* Action Row Inside Input */}
+          <div style={{
+            position: "absolute", bottom: "8px", left: "12px", right: "8px",
+            display: "flex", alignItems: "center", justifyContent: "space-between"
+          }}>
+            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
               <button
-                 onClick={() => setShowModeMenu(!showModeMenu)}
+                 onClick={(e) => {
+                   e.preventDefault();
+                   if (window.electronAPI?.requestScreenCapture) {
+                     window.electronAPI.requestScreenCapture();
+                   } else {
+                     setError("Screen capture only works in Electron app.");
+                   }
+                 }}
                  style={{
-                   display: "flex", alignItems: "center", gap: "6px",
-                   padding: "6px 12px", borderRadius: "20px", border: "none",
-                   backgroundColor: showModeMenu ? "rgba(255,255,255,0.1)" : "transparent",
-                   color: "#aaa", fontSize: "13px",
+                   display: "flex", alignItems: "center", gap: "4px",
+                   padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)",
+                   backgroundColor: "rgba(255,255,255,0.08)", color: "#ccc", fontSize: "12px", fontWeight: 500,
                    cursor: "pointer", transition: "all 0.2s"
                  }}
+                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)"}
+                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)"}
               >
-                {selectedModeName} <span style={{fontSize: "10px", opacity: 0.7}}>﹀</span>
+                <span style={{ fontSize: "14px" }}>⛶</span> Use Screen
               </button>
 
-              {showModeMenu && (
-                <div style={{
-                  position: "absolute", bottom: "100%", left: 0, marginBottom: "8px",
-                  backgroundColor: "#1e1e35", border: "1px solid #333", borderRadius: "8px",
-                  padding: "8px 0", minWidth: "160px", zIndex: 50,
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.5)"
-                }}>
-                  <div style={{ padding: "4px 12px", fontSize: "11px", color: "#888", marginBottom: "4px" }}>
-                    Your Modes
-                  </div>
-                  {modes.map(m => (
+              <button
+                 style={{
+                   display: "flex", alignItems: "center", gap: "4px",
+                   padding: "6px 10px", borderRadius: "8px", border: "none",
+                   backgroundColor: "rgba(234, 88, 12, 0.15)", color: "#fb923c", fontSize: "12px", fontWeight: 500,
+                   cursor: "default"
+                 }}
+              >
+                <span style={{ fontSize: "14px" }}>⚡</span> Smart
+              </button>
+
+              {/* Mode Selector inside Action Row */}
+              <div style={{ position: "relative" }}>
+                <button
+                   onClick={() => setShowModeMenu(!showModeMenu)}
+                   style={{
+                     display: "flex", alignItems: "center", gap: "4px",
+                     padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)",
+                     backgroundColor: showModeMenu ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.05)",
+                     color: "#ccc", fontSize: "12px", cursor: "pointer", transition: "all 0.2s"
+                   }}
+                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)"}
+                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = showModeMenu ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.05)"}
+                >
+                  {selectedModeName} <span style={{fontSize: "10px", opacity: 0.7}}>﹀</span>
+                </button>
+
+                {showModeMenu && (
+                  <div style={{
+                    position: "absolute", bottom: "100%", left: 0, marginBottom: "8px",
+                    backgroundColor: "rgba(30, 30, 35, 0.95)", backdropFilter: "blur(20px)",
+                    border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px",
+                    padding: "8px 0", minWidth: "160px", zIndex: 100,
+                    boxShadow: "0 8px 32px rgba(0,0,0,0.5)"
+                  }}>
+                    <div style={{ padding: "4px 12px", fontSize: "11px", color: "#888", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      Your Modes
+                    </div>
+                    {modes.map(m => (
+                      <div 
+                        key={m.name}
+                        onClick={() => { setSelectedModeName(m.name); setShowModeMenu(false); }}
+                        style={{
+                          padding: "8px 16px", fontSize: "13px", color: "#ddd", cursor: "pointer",
+                          display: "flex", justifyContent: "space-between", alignItems: "center",
+                          backgroundColor: selectedModeName === m.name ? "rgba(255,255,255,0.06)" : "transparent"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedModeName === m.name ? "rgba(255,255,255,0.06)" : "transparent"}
+                      >
+                        {m.name} {selectedModeName === m.name && <span style={{color: "#7c3aed"}}>✓</span>}
+                      </div>
+                    ))}
+                    <div style={{ height: "1px", backgroundColor: "rgba(255,255,255,0.1)", margin: "4px 0" }} />
                     <div 
-                      key={m.name}
-                      onClick={() => { setSelectedModeName(m.name); setShowModeMenu(false); }}
+                      onClick={() => { setShowModeMenu(false); setShowCreateMode(true); }}
                       style={{
-                        padding: "6px 12px", fontSize: "13px", color: "#ddd", cursor: "pointer",
-                        display: "flex", justifyContent: "space-between", alignItems: "center",
-                        backgroundColor: selectedModeName === m.name ? "rgba(255,255,255,0.05)" : "transparent"
+                        padding: "8px 16px", fontSize: "13px", color: "#fff", cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: "6px"
                       }}
                       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedModeName === m.name ? "rgba(255,255,255,0.05)" : "transparent"}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                     >
-                      {m.name} {selectedModeName === m.name && <span>✓</span>}
+                      + Create Mode
                     </div>
-                  ))}
-                  <div style={{ height: "1px", backgroundColor: "#333", margin: "4px 0" }} />
-                  <div 
-                    onClick={() => { setShowModeMenu(false); setShowCreateMode(true); }}
-                    style={{
-                      padding: "6px 12px", fontSize: "13px", color: "#fff", cursor: "pointer",
-                      display: "flex", alignItems: "center", gap: "6px"
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                  >
-                    + Create Mode
                   </div>
-                </div>
+                )}
+              </div>
+
+              <label title="Upload Audio" style={{
+                width: "28px", height: "28px", borderRadius: "8px",
+                backgroundColor: "rgba(255,255,255,0.05)", cursor: "pointer", color: "#aaa",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)"}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"}
+              >
+                📎<input type="file" accept="audio/*" onChange={handleAudioUpload} style={{ display: "none" }} />
+              </label>
+
+              {(questionText || response) && (
+                <button onClick={() => { setQuestionText(""); setResponse(""); setImage(null); setError(""); }}
+                  title="Clear all" style={{
+                    width: "28px", height: "28px", borderRadius: "8px", border: "none",
+                    cursor: "pointer", backgroundColor: "rgba(255,255,255,0.05)", color: "#aaa", fontSize: "12px",
+                    transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center"
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)"}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"}
+                >✕</button>
               )}
             </div>
 
-            <div style={{ width: "1px", height: "16px", backgroundColor: "#333", margin: "0 4px" }} />
-
-            {/* Mic button */}
             <button
-              onMouseDown={startRecording} onMouseUp={stopRecording}
-              onTouchStart={startRecording} onTouchEnd={stopRecording}
-              disabled={speechLoading}
-              title="Hold to record"
+              onClick={handleAskText}
+              disabled={loading || !questionText.trim()}
+              title="Send (Ctrl+Enter)"
               style={{
-                width: "32px", height: "32px", borderRadius: "50%", border: "none",
-                cursor: speechLoading ? "not-allowed" : "pointer",
-                backgroundColor: isRecording ? "#ef4444" : "transparent",
-                color: "#aaa", fontSize: "15px", display: "flex",
+                width: "32px", height: "32px", borderRadius: "8px", border: "none",
+                cursor: loading || !questionText.trim() ? "not-allowed" : "pointer",
+                backgroundColor: loading || !questionText.trim() ? "rgba(255,255,255,0.05)" : "#7c3aed",
+                color: loading || !questionText.trim() ? "#555" : "white",
+                fontSize: "14px", display: "flex",
                 alignItems: "center", justifyContent: "center", transition: "all 0.2s",
-                boxShadow: isRecording ? "0 0 0 3px rgba(239,68,68,0.3)" : "none"
-              }}
-              onMouseEnter={(e) => { if(!isRecording) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"; }}
-              onMouseLeave={(e) => { if(!isRecording) e.currentTarget.style.backgroundColor = "transparent"; }}
-            >{isRecording ? "⏹" : "🎤"}</button>
-
-            {/* Upload audio */}
-            <label title="Upload audio file" style={{
-              width: "32px", height: "32px", borderRadius: "50%",
-              backgroundColor: "transparent", cursor: "pointer", color: "#aaa",
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px",
-              transition: "all 0.2s"
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-            >
-              📎<input type="file" accept="audio/*" onChange={handleAudioUpload} style={{ display: "none" }} />
-            </label>
-
-            {/* Clear */}
-            {(questionText || response) && (
-              <button onClick={() => { setQuestionText(""); setResponse(""); setImage(null); setError(""); }}
-                title="Clear all" style={{
-                  width: "32px", height: "32px", borderRadius: "50%", border: "none",
-                  cursor: "pointer", backgroundColor: "transparent", color: "#aaa", fontSize: "14px",
-                  transition: "all 0.2s"
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-              >✕</button>
-            )}
-
-            {isRecording && <span style={{ fontSize: "11px", color: "#ef4444" }}>🔴 Recording…</span>}
-            {speechLoading && <span style={{ fontSize: "11px", color: "#a78bfa" }}>⏳ Transcribing…</span>}
-          </div>
-
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <span style={{ fontSize: "11px", color: "#444", display: "none" }}>or Ctrl+Shift+S</span>
-            <button
-              onClick={loading ? stopGeneration : handleAskText}
-              disabled={!loading && !questionText.trim()}
-              title={loading ? "Stop generation" : "Ask without screenshot (Ctrl+Enter)"}
-              style={{
-                width: "36px", height: "36px", borderRadius: "50%", border: "none",
-                cursor: !loading && !questionText.trim() ? "not-allowed" : "pointer",
-                backgroundColor: !loading && !questionText.trim() ? "#1e1e35" : loading ? "#ef4444" : "#0f5fff",
-                color: !loading && !questionText.trim() ? "#555" : "white",
-                fontSize: "16px", display: "flex",
-                alignItems: "center", justifyContent: "center", transition: "all 0.2s",
-                boxShadow: !loading && !questionText.trim() ? "none" : loading ? "0 2px 8px rgba(239,68,68,0.3)" : "0 2px 8px rgba(15,95,255,0.3)"
+                boxShadow: loading || !questionText.trim() ? "none" : "0 2px 10px rgba(124, 58, 237, 0.4)",
+                opacity: loading ? 0.5 : 1
               }}
             >
-              {loading ? "⏹" : "➤"}
+              ➤
             </button>
           </div>
         </div>
+
+        {/* Errors */}
+        {error && (
+          <div style={{
+            marginTop: "12px", padding: "10px 14px", borderRadius: "8px", 
+            backgroundColor: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)",
+            color: "#fca5a5", fontSize: "13px"
+          }}>{error}</div>
+        )}
+
       </div>
 
-      {/* Errors */}
-      {error && (
-        <div style={{
-          padding: "10px 14px", borderRadius: "8px", marginBottom: "12px",
-          backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
-          color: "#fca5a5", fontSize: "13px"
-        }}>{error}</div>
-      )}
 
-      {/* Loading state */}
-      {loading && !response && (
-        <div style={{ color: "#a78bfa", fontSize: "13px", marginBottom: "12px" }}>
-          ⏳ {image ? "Analyzing screenshot…" : "Thinking…"}
-        </div>
-      )}
-
-      {/* Screenshot preview */}
-      {image && (
-        <img src={image} alt="screenshot" style={{
-          width: "100%", maxWidth: "500px", borderRadius: "10px", marginBottom: "14px", display: "block"
-        }} />
-      )}
-
-      {/* Streaming response — appears token by token */}
-      {response && (
-        <div style={{
-          padding: "16px 18px", borderRadius: "12px", fontSize: "14px",
-          backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid #2a2a45",
-          lineHeight: "1.7", textAlign: "left", fontFamily: "system-ui, sans-serif"
-        }}>
-          <ReactMarkdown
-            components={{
-              p: ({node, ...props}) => <p style={{margin: "0 0 1em 0"}} {...props} />,
-              pre: ({node, ...props}) => <pre style={{backgroundColor: "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "8px", overflowX: "auto", margin: "1em 0"}} {...props} />,
-              code: ({node, inline, className, ...props}) => <code style={{backgroundColor: inline ? "rgba(0,0,0,0.2)" : "transparent", padding: inline ? "2px 4px" : 0, borderRadius: "4px", fontFamily: "monospace"}} className={className} {...props} />,
-              ul: ({node, ...props}) => <ul style={{listStyleType: "disc", paddingLeft: "20px", marginBottom: "1em"}} {...props} />,
-              ol: ({node, ...props}) => <ol style={{listStyleType: "decimal", paddingLeft: "20px", marginBottom: "1em"}} {...props} />,
-              li: ({node, ...props}) => <li style={{marginBottom: "0.25em"}} {...props} />,
-              h1: ({node, ...props}) => <h1 style={{fontSize: "1.5em", fontWeight: "bold", margin: "1em 0 0.5em"}} {...props} />,
-              h2: ({node, ...props}) => <h2 style={{fontSize: "1.3em", fontWeight: "bold", margin: "1em 0 0.5em"}} {...props} />,
-              h3: ({node, ...props}) => <h3 style={{fontSize: "1.1em", fontWeight: "bold", margin: "1em 0 0.5em"}} {...props} />,
-              a: ({node, ...props}) => <a style={{color: "#3b82f6", textDecoration: "underline"}} {...props} />
-            }}
-          >
-            {response + (loading ? " ▌" : "")}
-          </ReactMarkdown>
-        </div>
-      )}
-
-      {/* Auto-scroll anchor */}
-      <div ref={bottomRef} style={{ height: "1px" }} />
 
       {/* Create Mode Modal */}
       {showCreateMode && (
         <div style={{
           position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: "rgba(0,0,0,0.6)", zIndex: 100,
-          display: "flex", alignItems: "center", justifyContent: "center"
-        }}>
+          backgroundColor: "rgba(0,0,0,0.6)", zIndex: 100, backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center", WebkitAppRegion: "no-drag"
+        } as React.CSSProperties}>
           <div style={{
-            backgroundColor: "#1e1e35", borderRadius: "12px", padding: "20px", 
-            width: "90%", maxWidth: "500px", border: "1px solid #333", color: "white",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.5)"
+            backgroundColor: "rgba(30, 30, 35, 0.95)", borderRadius: "16px", padding: "24px", 
+            width: "90%", maxWidth: "400px", border: "1px solid rgba(255,255,255,0.1)", color: "white",
+            boxShadow: "0 16px 40px rgba(0,0,0,0.5)"
           }}>
-            <h2 style={{ fontSize: "16px", marginBottom: "16px", marginTop: 0 }}>Create Custom Persona</h2>
-            <div style={{ marginBottom: "12px" }}>
-              <label style={{ display: "block", fontSize: "12px", color: "#aaa", marginBottom: "4px" }}>Mode Name</label>
+            <h2 style={{ fontSize: "18px", marginBottom: "20px", marginTop: 0, fontWeight: 600 }}>Create Mode</h2>
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#aaa", marginBottom: "6px" }}>Name</label>
               <input 
                 type="text" 
                 value={newModeName} 
                 onChange={(e) => setNewModeName(e.target.value)} 
                 placeholder="e.g. Code Reviewer"
                 style={{
-                  width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #333",
-                  backgroundColor: "rgba(0,0,0,0.2)", color: "white", boxSizing: "border-box"
+                  width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)",
+                  backgroundColor: "rgba(0,0,0,0.3)", color: "white", boxSizing: "border-box", outline: "none"
                 }}
               />
             </div>
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", fontSize: "12px", color: "#aaa", marginBottom: "4px" }}>System Prompt (Markdown supported)</label>
+            <div style={{ marginBottom: "24px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#aaa", marginBottom: "6px" }}>System Prompt (Markdown supported)</label>
               <textarea 
                 value={newModePrompt} 
                 onChange={(e) => setNewModePrompt(e.target.value)} 
                 placeholder="You are an expert code reviewer..."
-                rows={5}
+                rows={4}
                 style={{
-                  width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #333",
-                  backgroundColor: "rgba(0,0,0,0.2)", color: "white", boxSizing: "border-box", resize: "vertical", fontFamily: "monospace"
+                  width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)",
+                  backgroundColor: "rgba(0,0,0,0.3)", color: "white", boxSizing: "border-box", resize: "vertical", fontFamily: "monospace", outline: "none"
                 }}
               />
             </div>
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button 
                 onClick={() => { setShowCreateMode(false); setNewModeName(""); setNewModePrompt(""); }}
-                style={{ padding: "8px 16px", borderRadius: "6px", border: "none", backgroundColor: "#333", color: "white", cursor: "pointer" }}
+                style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: "rgba(255,255,255,0.1)", color: "white", cursor: "pointer", fontSize: "13px", fontWeight: 500 }}
               >Cancel</button>
               <button 
                 onClick={() => {
@@ -674,19 +714,26 @@ function App() {
                 }}
                 disabled={!newModeName.trim()}
                 style={{ 
-                  padding: "8px 16px", borderRadius: "6px", border: "none", 
-                  backgroundColor: newModeName.trim() ? "#0f5fff" : "#2a2a45", 
-                  color: "white", cursor: newModeName.trim() ? "pointer" : "not-allowed",
-                  transition: "all 0.2s"
+                  padding: "8px 16px", borderRadius: "8px", border: "none", 
+                  backgroundColor: newModeName.trim() ? "#7c3aed" : "rgba(255,255,255,0.05)", 
+                  color: newModeName.trim() ? "white" : "#777", cursor: newModeName.trim() ? "pointer" : "not-allowed",
+                  transition: "all 0.2s", fontSize: "13px", fontWeight: 500
                 }}
-              >Save Mode</button>
+              >Save</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Cursor blink animation */}
-      <style>{`@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
+      {/* Animations */}
+      <style>{`
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+      `}</style>
     </div>
   );
 }
