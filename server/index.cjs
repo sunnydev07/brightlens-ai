@@ -50,7 +50,19 @@ app.post("/speech", upload.single("audio"), async (req, res) => {
       return res.status(400).json({ error: "Missing audio file. Use form-data field name 'audio'." });
     }
 
-    const text = await speechToText(req.file.path);
+    // Rename file to have .webm extension for audio decoder compatibility
+    const webmPath = req.file.path + ".webm";
+    fs.renameSync(req.file.path, webmPath);
+    req.file.path = webmPath;
+
+    // Guard: reject empty or tiny files (< 1KB)
+    const stats = fs.statSync(webmPath);
+    if (stats.size < 1024) {
+      fs.unlinkSync(webmPath);
+      return res.json({ text: "" });
+    }
+
+    const text = await speechToText(webmPath);
     res.json({ text });
   } catch (error) {
     const message = error?.message || "Speech transcription failed.";

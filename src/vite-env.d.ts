@@ -16,5 +16,6 @@ interface ElectronScreenCaptureSource {
 interface Window {
   electronAPI?: {
     onScreenCapture: (callback: (event: unknown, source: ElectronScreenCaptureSource) => void) => void;
+    captureDone?: () => void;
   };
 }
