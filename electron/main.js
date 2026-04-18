@@ -43,8 +43,7 @@ app.whenReady().then(() => {
     restoreWindowAfterCapture();
   });
 
-  // 🔥 Global hotkey
-  globalShortcut.register('CommandOrControl+Shift+S', async () => {
+  const doScreenCapture = async () => {
     if (!win || win.isDestroyed() || captureInProgress) {
       return;
     }
@@ -83,7 +82,12 @@ app.whenReady().then(() => {
       console.error('Screen capture start failed:', error);
       restoreWindowAfterCapture();
     }
-  });
+  };
+
+  // 🔥 Global hotkey
+  globalShortcut.register('CommandOrControl+Shift+S', doScreenCapture);
+
+  ipcMain.on('REQUEST_SCREEN_CAPTURE', doScreenCapture);
 });
 
 app.on('will-quit', () => {

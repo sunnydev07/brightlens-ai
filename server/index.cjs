@@ -5,7 +5,7 @@ const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const { analyze } = require("./aiRouter.cjs");
+const { analyze, analyzeStream } = require("./aiRouter.cjs");
 const { speechToText } = require("./speech.cjs");
 const { save } = require("./db.cjs");
 
@@ -19,13 +19,13 @@ const upload = multer({ dest: uploadDir });
 
 app.post("/analyze", async (req, res) => {
   try {
-    const { image, prompt } = req.body ?? {};
+    const { image, prompt, mode, systemPrompt } = req.body ?? {};
 
     if (!image && !prompt) {
       return res.status(400).json({ error: "Missing image or prompt." });
     }
 
-    const result = await analyze(image, prompt);
+    const result = await analyze(image, prompt, mode, systemPrompt);
 
     // Save to database without blocking the response.
     save(prompt, result);
@@ -41,6 +41,28 @@ app.post("/analyze", async (req, res) => {
 
     console.error("Analyze error:", error.response?.data || error);
     res.status(statusCode).json({ error: message });
+  }
+});
+
+// ── Streaming endpoint (SSE) ──────────────────────────────────────────────────
+app.post("/analyze-stream", async (req, res) => {
+  try {
+    const { image, prompt, mode, systemPrompt } = req.body ?? {};
+
+    if (!image && !prompt) {
+      return res.status(400).json({ error: "Missing image or prompt." });
+    }
+
+    await analyzeStream(image, prompt, mode, systemPrompt, res);
+
+    // Save prompt to DB after stream completes
+    save(prompt, "[streamed]");
+  } catch (error) {
+    console.error("Stream error:", error.response?.data || error);
+    if (!res.headersSent) {
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ error: error.message || "Streaming failed." });
+    }
   }
 });
 

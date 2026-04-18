@@ -21,6 +21,7 @@
     "multer": "^2.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
     "sqlite3": "^6.0.1",
     "tailwindcss": "^4.2.2",
     "wait-on": "^9.0.5"

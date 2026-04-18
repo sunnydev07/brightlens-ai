@@ -26,8 +26,12 @@ function restoreWindowAfterCapture() {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 400,
-    height: 600,
+    width: 450,
+    height: 750,
+    frame: false,
+    transparent: true,
+    titleBarStyle: 'hiddenInset',
+    backgroundColor: '#00000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs')
     }
@@ -43,8 +47,13 @@ app.whenReady().then(() => {
     restoreWindowAfterCapture();
   });
 
-  // 🔥 Global hotkey
-  globalShortcut.register('CommandOrControl+Shift+S', async () => {
+  ipcMain.on('close-app', () => {
+    if (win) {
+      win.close();
+    }
+  });
+
+  const doScreenCapture = async () => {
     if (!win || win.isDestroyed() || captureInProgress) {
       return;
     }
@@ -83,7 +92,12 @@ app.whenReady().then(() => {
       console.error('Screen capture start failed:', error);
       restoreWindowAfterCapture();
     }
-  });
+  };
+
+  // 🔥 Global hotkey
+  globalShortcut.register('CommandOrControl+Shift+S', doScreenCapture);
+
+  ipcMain.on('REQUEST_SCREEN_CAPTURE', doScreenCapture);
 });
 
 app.on('will-quit', () => {
