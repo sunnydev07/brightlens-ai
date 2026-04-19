@@ -7,7 +7,7 @@ const cors = require("cors");
 const multer = require("multer");
 const { analyze, analyzeStream } = require("./aiRouter.cjs");
 const { speechToText } = require("./speech.cjs");
-const { save } = require("./db.cjs");
+const { save, getSessionHistory } = require("./db.cjs");
 
 const app = express();
 app.use(cors());
@@ -25,7 +25,15 @@ app.post("/analyze", async (req, res) => {
       return res.status(400).json({ error: "Missing image or prompt." });
     }
 
-    const result = await analyze(image, prompt, mode, systemPrompt);
+    const history = await getSessionHistory();
+    let historyPrefix = "";
+    if (history.length > 0) {
+      historyPrefix = "Previous conversation history:\n" + history.map(row => `User: ${row.question}\nAI: ${row.answer}`).join("\n\n") + "\n\nCurrent request:\n";
+    }
+
+    const fullPrompt = historyPrefix + prompt;
+
+    const result = await analyze(image, fullPrompt, mode, systemPrompt);
 
     // Save to database without blocking the response.
     save(prompt, result);
@@ -53,10 +61,20 @@ app.post("/analyze-stream", async (req, res) => {
       return res.status(400).json({ error: "Missing image or prompt." });
     }
 
-    await analyzeStream(image, prompt, mode, systemPrompt, res);
+    const history = await getSessionHistory();
+    let historyPrefix = "";
+    if (history.length > 0) {
+      historyPrefix = "Previous conversation history:\n" + history.map(row => `User: ${row.question}\nAI: ${row.answer}`).join("\n\n") + "\n\nCurrent request:\n";
+    }
 
-    // Save prompt to DB after stream completes
-    save(prompt, "[streamed]");
+    const fullPrompt = historyPrefix + prompt;
+
+    const fullText = await analyzeStream(image, fullPrompt, mode, systemPrompt, res);
+
+    if (fullText) {
+      // Save prompt to DB after stream completes
+      save(prompt, fullText);
+    }
   } catch (error) {
     console.error("Stream error:", error.response?.data || error);
     if (!res.headersSent) {

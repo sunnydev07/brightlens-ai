@@ -53,6 +53,22 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.on('minimize-app', () => {
+    if (win) {
+      win.minimize();
+    }
+  });
+
+  ipcMain.on('maximize-app', () => {
+    if (win) {
+      if (win.isMaximized()) {
+        win.unmaximize();
+      } else {
+        win.maximize();
+      }
+    }
+  });
+
   const doScreenCapture = async () => {
     if (!win || win.isDestroyed() || captureInProgress) {
       return;
@@ -94,8 +110,19 @@ app.whenReady().then(() => {
     }
   };
 
-  // 🔥 Global hotkey
+  // 🔥 Global hotkeys
   globalShortcut.register('CommandOrControl+Shift+S', doScreenCapture);
+
+  globalShortcut.register('CommandOrControl+O', () => {
+    if (!win || win.isDestroyed()) return;
+    if (!win.isVisible()) {
+      win.show();
+    }
+    if (win.isMinimized()) {
+      win.restore();
+    }
+    win.focus();
+  });
 
   ipcMain.on('REQUEST_SCREEN_CAPTURE', doScreenCapture);
 });

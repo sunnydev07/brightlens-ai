@@ -19,5 +19,7 @@ interface Window {
     captureDone?: () => void;
     requestScreenCapture?: () => void;
     closeApp?: () => void;
+    minimizeApp?: () => void;
+    maximizeApp?: () => void;
   };
 }
