@@ -53,6 +53,12 @@ async function analyzeStream(image, prompt, mode = "online", systemPrompt = null
 // ── Streaming: Ollama text (llama3.2) ─────────────────────────────────────────
 async function streamOllamaText(prompt, systemPrompt, expressRes) {
   let axiosRes;
+  const controller = new AbortController();
+  
+  expressRes.on("close", () => {
+    controller.abort();
+  });
+
   try {
     axiosRes = await axios.post(
       `${OLLAMA_BASE}/api/generate`,
@@ -62,9 +68,10 @@ async function streamOllamaText(prompt, systemPrompt, expressRes) {
         stream: true,
         options: { temperature: 0.2, num_predict: 4096 }  // ← increased
       },
-      { responseType: "stream", timeout: 300_000 }
+      { responseType: "stream", timeout: 300_000, signal: controller.signal }
     );
   } catch (err) {
+    if (axios.isCancel(err)) return; // Ignore aborts
     throw normalizeOllamaError(err, OLLAMA_MODEL);
   }
   return pipeOllamaStream(axiosRes.data, expressRes);
@@ -74,6 +81,12 @@ async function streamOllamaText(prompt, systemPrompt, expressRes) {
 async function streamOllamaVision(image, prompt, systemPrompt, expressRes) {
   const base64Data = extractBase64(image);
   let axiosRes;
+  const controller = new AbortController();
+
+  expressRes.on("close", () => {
+    controller.abort();
+  });
+
   try {
     axiosRes = await axios.post(
       `${OLLAMA_BASE}/api/generate`,
@@ -84,9 +97,10 @@ async function streamOllamaVision(image, prompt, systemPrompt, expressRes) {
         stream: true,
         options: { temperature: 0.2, num_predict: 2048 }  // ← increased
       },
-      { responseType: "stream", timeout: 300_000 }
+      { responseType: "stream", timeout: 300_000, signal: controller.signal }
     );
   } catch (err) {
+    if (axios.isCancel(err)) return; // Ignore aborts
     throw normalizeOllamaError(err, OLLAMA_VISION_MODEL);
   }
   return pipeOllamaStream(axiosRes.data, expressRes);

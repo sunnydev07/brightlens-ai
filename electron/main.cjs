@@ -110,8 +110,19 @@ app.whenReady().then(() => {
     }
   };
 
-  // 🔥 Global hotkey
+  // 🔥 Global hotkeys
   globalShortcut.register('CommandOrControl+Shift+S', doScreenCapture);
+
+  globalShortcut.register('CommandOrControl+O', () => {
+    if (!win || win.isDestroyed()) return;
+    if (!win.isVisible()) {
+      win.show();
+    }
+    if (win.isMinimized()) {
+      win.restore();
+    }
+    win.focus();
+  });
 
   ipcMain.on('REQUEST_SCREEN_CAPTURE', doScreenCapture);
 });
