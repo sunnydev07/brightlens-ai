@@ -26,8 +26,10 @@ async function streamAnalyze(
 
   while (true) {
     if (signal?.aborted) {
-      reader.cancel();
-      break;
+      await reader.cancel();
+      const abortErr = new Error("Aborted");
+      abortErr.name = "AbortError";
+      throw abortErr;
     }
     const { done, value } = await reader.read();
     if (done) break;
@@ -658,23 +660,39 @@ function App() {
               )}
             </div>
 
-            <button
-              onClick={handleAskText}
-              disabled={loading || !questionText.trim()}
-              title="Send (Ctrl+Enter)"
-              style={{
-                width: "32px", height: "32px", borderRadius: "8px", border: "none",
-                cursor: loading || !questionText.trim() ? "not-allowed" : "pointer",
-                backgroundColor: loading || !questionText.trim() ? "rgba(255,255,255,0.05)" : "#7c3aed",
-                color: loading || !questionText.trim() ? "#555" : "white",
-                fontSize: "14px", display: "flex",
-                alignItems: "center", justifyContent: "center", transition: "all 0.2s",
-                boxShadow: loading || !questionText.trim() ? "none" : "0 2px 10px rgba(124, 58, 237, 0.4)",
-                opacity: loading ? 0.5 : 1
-              }}
-            >
-              ➤
-            </button>
+            {loading ? (
+              <button
+                onClick={stopGeneration}
+                title="Stop Generation"
+                style={{
+                  width: "32px", height: "32px", borderRadius: "8px", border: "none",
+                  cursor: "pointer",
+                  backgroundColor: "rgba(239, 68, 68, 0.2)",
+                  color: "#ef4444",
+                  fontSize: "14px", display: "flex",
+                  alignItems: "center", justifyContent: "center", transition: "all 0.2s",
+                }}
+              >
+                ■
+              </button>
+            ) : (
+              <button
+                onClick={handleAskText}
+                disabled={!questionText.trim()}
+                title="Send (Ctrl+Enter)"
+                style={{
+                  width: "32px", height: "32px", borderRadius: "8px", border: "none",
+                  cursor: !questionText.trim() ? "not-allowed" : "pointer",
+                  backgroundColor: !questionText.trim() ? "rgba(255,255,255,0.05)" : "#7c3aed",
+                  color: !questionText.trim() ? "#555" : "white",
+                  fontSize: "14px", display: "flex",
+                  alignItems: "center", justifyContent: "center", transition: "all 0.2s",
+                  boxShadow: !questionText.trim() ? "none" : "0 2px 10px rgba(124, 58, 237, 0.4)",
+                }}
+              >
+                ➤
+              </button>
+            )}
           </div>
         </div>
 
