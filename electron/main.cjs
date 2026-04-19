@@ -53,6 +53,22 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.on('minimize-app', () => {
+    if (win) {
+      win.minimize();
+    }
+  });
+
+  ipcMain.on('maximize-app', () => {
+    if (win) {
+      if (win.isMaximized()) {
+        win.unmaximize();
+      } else {
+        win.maximize();
+      }
+    }
+  });
+
   const doScreenCapture = async () => {
     if (!win || win.isDestroyed() || captureInProgress) {
       return;

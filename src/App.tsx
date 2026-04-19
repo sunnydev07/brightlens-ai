@@ -384,21 +384,54 @@ function App() {
 
         </div>
         
-        {/* Close Button */}
-        <button 
-          onClick={(e) => { e.preventDefault(); window.electronAPI?.closeApp?.(); }}
-          style={{
-            WebkitAppRegion: "no-drag",
-            width: "28px", height: "28px", borderRadius: "50%", border: "none", 
-            backgroundColor: "transparent", color: "#aaa", fontSize: "14px",
-            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-            transition: "all 0.2s"
-          } as React.CSSProperties}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.2)"; e.currentTarget.style.color = "#fca5a5"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#aaa"; }}
-        >
-          ✕
-        </button>
+        {/* Window Controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: "2px", WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+          {/* Minimize Button */}
+          <button 
+            onClick={(e) => { e.preventDefault(); window.electronAPI?.minimizeApp?.(); }}
+            title="Minimize"
+            style={{
+              width: "28px", height: "28px", borderRadius: "50%", border: "none", 
+              backgroundColor: "transparent", color: "#aaa", fontSize: "14px",
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = "#fff"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#aaa"; }}
+          >
+            ─
+          </button>
+          {/* Maximize Button */}
+          <button 
+            onClick={(e) => { e.preventDefault(); window.electronAPI?.maximizeApp?.(); }}
+            title="Maximize"
+            style={{
+              width: "28px", height: "28px", borderRadius: "50%", border: "none", 
+              backgroundColor: "transparent", color: "#aaa", fontSize: "12px",
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = "#fff"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#aaa"; }}
+          >
+            □
+          </button>
+          {/* Close Button */}
+          <button 
+            onClick={(e) => { e.preventDefault(); window.electronAPI?.closeApp?.(); }}
+            title="Close"
+            style={{
+              width: "28px", height: "28px", borderRadius: "50%", border: "none", 
+              backgroundColor: "transparent", color: "#aaa", fontSize: "14px",
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.2)"; e.currentTarget.style.color = "#fca5a5"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#aaa"; }}
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* INTEGRATED CONTENT AREA */}
