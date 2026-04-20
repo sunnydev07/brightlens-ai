@@ -29,27 +29,36 @@ async function analyzeStream(image, prompt, mode = "online", systemPrompt = null
   try {
     if (image) {
       if (mode === "offline") {
-        await streamOllamaVision(image, prompt, systemPrompt, expressRes);
+        return await streamOllamaVision(image, prompt, systemPrompt, expressRes);
       } else {
         // Gemini: get full response then emit as one event
         const text = await callGeminiModel(image, prompt, systemPrompt);
         sendSSE(expressRes, { token: text, done: true });
         expressRes.end();
+        return text;
       }
     } else {
-      await streamOllamaText(prompt, systemPrompt, expressRes);
+      return await streamOllamaText(prompt, systemPrompt, expressRes);
     }
   } catch (err) {
     if (!expressRes.writableEnded) {
       sendSSE(expressRes, { error: err.message || "Analysis failed.", done: true });
       expressRes.end();
     }
+    return null;
   }
 }
+
 
 // ── Streaming: Ollama text (llama3.2) ─────────────────────────────────────────
 async function streamOllamaText(prompt, systemPrompt, expressRes) {
   let axiosRes;
+  const controller = new AbortController();
+  
+  expressRes.on("close", () => {
+    controller.abort();
+  });
+
   try {
     axiosRes = await axios.post(
       `${OLLAMA_BASE}/api/generate`,
@@ -59,9 +68,10 @@ async function streamOllamaText(prompt, systemPrompt, expressRes) {
         stream: true,
         options: { temperature: 0.2, num_predict: 4096 }  // ← increased
       },
-      { responseType: "stream", timeout: 300_000 }
+      { responseType: "stream", timeout: 300_000, signal: controller.signal }
     );
   } catch (err) {
+    if (axios.isCancel(err)) return; // Ignore aborts
     throw normalizeOllamaError(err, OLLAMA_MODEL);
   }
   return pipeOllamaStream(axiosRes.data, expressRes);
@@ -71,6 +81,12 @@ async function streamOllamaText(prompt, systemPrompt, expressRes) {
 async function streamOllamaVision(image, prompt, systemPrompt, expressRes) {
   const base64Data = extractBase64(image);
   let axiosRes;
+  const controller = new AbortController();
+
+  expressRes.on("close", () => {
+    controller.abort();
+  });
+
   try {
     axiosRes = await axios.post(
       `${OLLAMA_BASE}/api/generate`,
@@ -81,9 +97,10 @@ async function streamOllamaVision(image, prompt, systemPrompt, expressRes) {
         stream: true,
         options: { temperature: 0.2, num_predict: 2048 }  // ← increased
       },
-      { responseType: "stream", timeout: 300_000 }
+      { responseType: "stream", timeout: 300_000, signal: controller.signal }
     );
   } catch (err) {
+    if (axios.isCancel(err)) return; // Ignore aborts
     throw normalizeOllamaError(err, OLLAMA_VISION_MODEL);
   }
   return pipeOllamaStream(axiosRes.data, expressRes);
@@ -93,6 +110,7 @@ async function streamOllamaVision(image, prompt, systemPrompt, expressRes) {
 function pipeOllamaStream(stream, expressRes) {
   return new Promise((resolve, reject) => {
     let buf = "";
+    let fullText = "";
 
     stream.on("data", (chunk) => {
       buf += chunk.toString();
@@ -106,15 +124,16 @@ function pipeOllamaStream(stream, expressRes) {
           if (obj.error) {
             sendSSE(expressRes, { error: obj.error, done: true });
             if (!expressRes.writableEnded) expressRes.end();
-            return resolve();
+            return resolve(fullText);
           }
           if (obj.response !== undefined) {
+            fullText += obj.response;
             sendSSE(expressRes, { token: obj.response, done: false });
           }
           if (obj.done) {
             sendSSE(expressRes, { token: "", done: true });
             if (!expressRes.writableEnded) expressRes.end();
-            return resolve();
+            return resolve(fullText);
           }
         } catch { /* skip malformed JSON chunks */ }
       }
@@ -125,7 +144,7 @@ function pipeOllamaStream(stream, expressRes) {
         sendSSE(expressRes, { token: "", done: true });
         expressRes.end();
       }
-      resolve();
+      resolve(fullText);
     });
 
     stream.on("error", (err) => reject(normalizeOllamaError(err, "model")));

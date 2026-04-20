@@ -26,8 +26,10 @@ async function streamAnalyze(
 
   while (true) {
     if (signal?.aborted) {
-      reader.cancel();
-      break;
+      await reader.cancel();
+      const abortErr = new Error("Aborted");
+      abortErr.name = "AbortError";
+      throw abortErr;
     }
     const { done, value } = await reader.read();
     if (done) break;
@@ -208,6 +210,7 @@ function App() {
       setError("");
       setResponse("");
       setImage(null);
+      setQuestionText(""); // Clear input area
       autoScrollRef.current = true; // reset to true on new request
       const currentMode = modesRef.current.find(m => m.name === selectedModeNameRef.current);
       
@@ -278,6 +281,8 @@ function App() {
         const prompt = q
           ? `Answer the user's question using the screenshot as context. Question: ${q}`
           : "Explain what's on screen in simple steps";
+          
+        setQuestionText(""); // Clear input area
 
         const currentMode = modesRef.current.find(m => m.name === selectedModeNameRef.current);
         autoScrollRef.current = true; // reset to true on new request
@@ -384,21 +389,54 @@ function App() {
 
         </div>
         
-        {/* Close Button */}
-        <button 
-          onClick={(e) => { e.preventDefault(); window.electronAPI?.closeApp?.(); }}
-          style={{
-            WebkitAppRegion: "no-drag",
-            width: "28px", height: "28px", borderRadius: "50%", border: "none", 
-            backgroundColor: "transparent", color: "#aaa", fontSize: "14px",
-            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-            transition: "all 0.2s"
-          } as React.CSSProperties}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.2)"; e.currentTarget.style.color = "#fca5a5"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#aaa"; }}
-        >
-          ✕
-        </button>
+        {/* Window Controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: "2px", WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+          {/* Minimize Button */}
+          <button 
+            onClick={(e) => { e.preventDefault(); window.electronAPI?.minimizeApp?.(); }}
+            title="Minimize"
+            style={{
+              width: "28px", height: "28px", borderRadius: "50%", border: "none", 
+              backgroundColor: "transparent", color: "#aaa", fontSize: "14px",
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = "#fff"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#aaa"; }}
+          >
+            ─
+          </button>
+          {/* Maximize Button */}
+          <button 
+            onClick={(e) => { e.preventDefault(); window.electronAPI?.maximizeApp?.(); }}
+            title="Maximize"
+            style={{
+              width: "28px", height: "28px", borderRadius: "50%", border: "none", 
+              backgroundColor: "transparent", color: "#aaa", fontSize: "12px",
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = "#fff"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#aaa"; }}
+          >
+            □
+          </button>
+          {/* Close Button */}
+          <button 
+            onClick={(e) => { e.preventDefault(); window.electronAPI?.closeApp?.(); }}
+            title="Close"
+            style={{
+              width: "28px", height: "28px", borderRadius: "50%", border: "none", 
+              backgroundColor: "transparent", color: "#aaa", fontSize: "14px",
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.2)"; e.currentTarget.style.color = "#fca5a5"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#aaa"; }}
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* INTEGRATED CONTENT AREA */}
@@ -492,7 +530,7 @@ function App() {
             value={questionText}
             onChange={e => setQuestionText(e.target.value)}
             onKeyDown={e => {
-              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); handleAskText(); }
+              if (!e.shiftKey && e.key === "Enter") { e.preventDefault(); handleAskText(); }
             }}
             placeholder="Ask about your screen..."
             disabled={speechLoading}
@@ -625,23 +663,39 @@ function App() {
               )}
             </div>
 
-            <button
-              onClick={handleAskText}
-              disabled={loading || !questionText.trim()}
-              title="Send (Ctrl+Enter)"
-              style={{
-                width: "32px", height: "32px", borderRadius: "8px", border: "none",
-                cursor: loading || !questionText.trim() ? "not-allowed" : "pointer",
-                backgroundColor: loading || !questionText.trim() ? "rgba(255,255,255,0.05)" : "#7c3aed",
-                color: loading || !questionText.trim() ? "#555" : "white",
-                fontSize: "14px", display: "flex",
-                alignItems: "center", justifyContent: "center", transition: "all 0.2s",
-                boxShadow: loading || !questionText.trim() ? "none" : "0 2px 10px rgba(124, 58, 237, 0.4)",
-                opacity: loading ? 0.5 : 1
-              }}
-            >
-              ➤
-            </button>
+            {loading ? (
+              <button
+                onClick={stopGeneration}
+                title="Stop Generation"
+                style={{
+                  width: "32px", height: "32px", borderRadius: "8px", border: "none",
+                  cursor: "pointer",
+                  backgroundColor: "rgba(239, 68, 68, 0.2)",
+                  color: "#ef4444",
+                  fontSize: "14px", display: "flex",
+                  alignItems: "center", justifyContent: "center", transition: "all 0.2s",
+                }}
+              >
+                ■
+              </button>
+            ) : (
+              <button
+                onClick={handleAskText}
+                disabled={!questionText.trim()}
+                title="Send (Enter)"
+                style={{
+                  width: "32px", height: "32px", borderRadius: "8px", border: "none",
+                  cursor: !questionText.trim() ? "not-allowed" : "pointer",
+                  backgroundColor: !questionText.trim() ? "rgba(255,255,255,0.05)" : "#7c3aed",
+                  color: !questionText.trim() ? "#555" : "white",
+                  fontSize: "14px", display: "flex",
+                  alignItems: "center", justifyContent: "center", transition: "all 0.2s",
+                  boxShadow: !questionText.trim() ? "none" : "0 2px 10px rgba(124, 58, 237, 0.4)",
+                }}
+              >
+                ➤
+              </button>
+            )}
           </div>
         </div>
 
