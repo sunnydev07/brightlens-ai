@@ -17,3 +17,9 @@ test('theme tokens cover markdown and glass UI surfaces', () => {
     assert.match(appSource, new RegExp(token));
   }
 });
+
+test('query loading renders submitted question with compact shimmering thinking state', () => {
+  assert.match(appSource, /submittedQuestion/);
+  assert.match(appSource, /Thinking/);
+  assert.match(appSource, /thinkingShimmer/);
+});

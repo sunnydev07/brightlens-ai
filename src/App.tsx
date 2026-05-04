@@ -242,6 +242,7 @@ function App() {
 
   const [image, setImage] = useState<string | null>(null);
   const [response, setResponse] = useState("");
+  const [submittedQuestion, setSubmittedQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [speechLoading, setSpeechLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -407,6 +408,7 @@ function App() {
       setError("");
       setResponse("");
       setImage(null);
+      setSubmittedQuestion(q);
       setQuestionText(""); // Clear input area
       autoScrollRef.current = true; // reset to true on new request
       const currentMode = modesRef.current.find(m => m.name === selectedModeNameRef.current);
@@ -478,6 +480,7 @@ function App() {
         const prompt = q
           ? `Answer the user's question using the screenshot as context. Question: ${q}`
           : "Explain what's on screen in simple steps";
+        setSubmittedQuestion(q || "Explain what's on screen in simple steps");
           
         setQuestionText(""); // Clear input area
 
@@ -663,17 +666,34 @@ function App() {
            </div>
         </div>
 
-        {/* Dynamic Context Visualizer */}
+        {/* Compact chat-style loading state */}
         {(loading || speechLoading) && !response && (
-          <div style={{ 
-            padding: "20px", borderRadius: "16px", backgroundColor: theme.input, 
-            border: `1px dashed ${theme.accent}`, display: "flex", flexDirection: "column", 
-            alignItems: "center", justifyContent: "center", gap: "12px", marginBottom: "20px" 
+          <div style={{
+            display: "flex", flexDirection: "column", gap: "10px", alignItems: "flex-start",
+            flex: 1, marginBottom: "20px", overflowY: "auto", justifyContent: "flex-start"
           }}>
-            <div style={{ width: "32px", height: "32px", borderRadius: "50%", border: `3px solid ${theme.accentSoft}`, borderTopColor: theme.accent, animation: "spin 1s linear infinite" }} />
-            <span style={{ fontSize: "13px", color: theme.accentText, fontWeight: 500 }}>
-              {speechLoading ? "Listening & Transcribing..." : image ? "Analyzing Visual Context..." : "Processing Command..."}
-            </span>
+            {submittedQuestion && (
+              <div style={{
+                alignSelf: "flex-end", maxWidth: "82%", padding: "10px 12px", borderRadius: "14px 14px 4px 14px",
+                backgroundColor: theme.accentSoft, border: `1px solid ${theme.accent}`,
+                color: theme.text, fontSize: "13px", lineHeight: 1.45, boxShadow: theme.insetShadow
+              }}>
+                {submittedQuestion}
+              </div>
+            )}
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: "8px", width: "fit-content",
+              padding: "8px 12px", borderRadius: "999px", backgroundColor: theme.response,
+              border: theme.border, boxShadow: theme.insetShadow
+            }}>
+              <span style={{
+                width: "7px", height: "7px", borderRadius: "50%", backgroundColor: speechLoading ? theme.success : theme.accent,
+                boxShadow: `0 0 10px ${speechLoading ? theme.success : theme.accent}`
+              }} />
+              <span className="thinking-shimmer" style={{ fontSize: "13px", fontWeight: 700 }}>
+                {speechLoading ? "Listening" : "Thinking"}
+              </span>
+            </div>
           </div>
         )}
 
@@ -714,7 +734,7 @@ function App() {
         )}
 
         {/* Spacer if empty to push input to bottom */}
-        {!response && !loading && <div style={{ flex: 1 }} />}
+        {!response && !loading && !speechLoading && <div style={{ flex: 1 }} />}
 
         {/* Input Area */}
         <div style={{
@@ -847,8 +867,8 @@ function App() {
                 📎<input type="file" accept="audio/*" onChange={handleAudioUpload} style={{ display: "none" }} />
               </label>
 
-              {(questionText || response) && (
-                <button onClick={() => { setQuestionText(""); setResponse(""); setImage(null); setError(""); }}
+              {(questionText || response || submittedQuestion) && (
+                <button onClick={() => { setQuestionText(""); setResponse(""); setSubmittedQuestion(""); setImage(null); setError(""); }}
                   title="Clear all" style={{
                     width: "28px", height: "28px", borderRadius: "8px", border: "none",
                     cursor: "pointer", backgroundColor: theme.button, color: theme.textSubtle, fontSize: "12px",
@@ -1077,6 +1097,15 @@ function App() {
       <style>{`
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes thinkingShimmer { 0% { background-position: 200% center; } 100% { background-position: -200% center; } }
+        .thinking-shimmer {
+          color: transparent;
+          background: linear-gradient(90deg, ${theme.textSubtle}, ${theme.accentText}, ${theme.text}, ${theme.accentText}, ${theme.textSubtle});
+          background-size: 220% auto;
+          -webkit-background-clip: text;
+          background-clip: text;
+          animation: thinkingShimmer 1.4s linear infinite;
+        }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
