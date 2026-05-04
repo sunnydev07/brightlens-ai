@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 
 // ── Streaming helper (module-level, no React deps) ────────────────────────────
 async function streamAnalyze(
-  payload: { image?: string | null; prompt: string; mode: string; systemPrompt?: string | null },
+  payload: { image?: string | null; prompt: string; mode: string; systemPrompt?: string | null; onlineVisionModel?: string },
   onToken: (t: string) => void,
   signal?: AbortSignal
 ): Promise<void> {
@@ -80,6 +80,10 @@ function App() {
   const [showCreateMode, setShowCreateMode] = useState(false);
   const [newModeName, setNewModeName] = useState("");
   const [newModePrompt, setNewModePrompt] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [onlineVisionModel, setOnlineVisionModel] = useState<"gemini" | "nvidia">(() => {
+    return (localStorage.getItem("brightlens_online_vision") as "gemini" | "nvidia") || "gemini";
+  });
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -104,6 +108,11 @@ function App() {
     modesRef.current = modes; 
     localStorage.setItem("brightlens_modes", JSON.stringify(modes));
   }, [modes]);
+  const onlineVisionModelRef = useRef<"gemini" | "nvidia">("gemini");
+  useEffect(() => { 
+    onlineVisionModelRef.current = onlineVisionModel; 
+    localStorage.setItem("brightlens_online_vision", onlineVisionModel);
+  }, [onlineVisionModel]);
 
   // ── Auto-scroll logic ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -218,7 +227,7 @@ function App() {
       abortControllerRef.current = controller;
 
       await streamAnalyze(
-        { prompt: q, mode: imageModeRef.current, systemPrompt: currentMode?.systemPrompt },
+        { prompt: q, mode: imageModeRef.current, systemPrompt: currentMode?.systemPrompt, onlineVisionModel: onlineVisionModelRef.current },
         (token) => setResponse(prev => prev + token),
         controller.signal
       );
@@ -291,7 +300,7 @@ function App() {
         abortControllerRef.current = controller;
 
         await streamAnalyze(
-          { image: base64, prompt, mode: imageModeRef.current, systemPrompt: currentMode?.systemPrompt },
+          { image: base64, prompt, mode: imageModeRef.current, systemPrompt: currentMode?.systemPrompt, onlineVisionModel: onlineVisionModelRef.current },
           (token) => setResponse(prev => prev + token),
           controller.signal
         );
@@ -661,6 +670,17 @@ function App() {
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"}
                 >✕</button>
               )}
+
+              <button 
+                onClick={(e) => { e.preventDefault(); setShowSettings(true); }}
+                title="Settings" style={{
+                  width: "28px", height: "28px", borderRadius: "8px", border: "none",
+                  cursor: "pointer", backgroundColor: "rgba(255,255,255,0.05)", color: "#aaa", fontSize: "14px",
+                  transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)"}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"}
+              >⚙</button>
             </div>
 
             {loading ? (
@@ -774,6 +794,65 @@ function App() {
                   transition: "all 0.2s", fontSize: "13px", fontWeight: 500
                 }}
               >Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.6)", zIndex: 100, backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center", WebkitAppRegion: "no-drag"
+        } as React.CSSProperties}>
+          <div style={{
+            backgroundColor: "rgba(30, 30, 35, 0.95)", borderRadius: "16px", padding: "24px", 
+            width: "90%", maxWidth: "400px", border: "1px solid rgba(255,255,255,0.1)", color: "white",
+            boxShadow: "0 16px 40px rgba(0,0,0,0.5)"
+          }}>
+            <h2 style={{ fontSize: "18px", marginBottom: "20px", marginTop: 0, fontWeight: 600 }}>Settings</h2>
+            
+            <div style={{ marginBottom: "24px" }}>
+              <label style={{ display: "block", fontSize: "13px", color: "#ddd", marginBottom: "8px", fontWeight: 500 }}>Online Vision Model</label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  onClick={() => setOnlineVisionModel("gemini")}
+                  style={{
+                    flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)",
+                    backgroundColor: onlineVisionModel === "gemini" ? "rgba(124, 58, 237, 0.2)" : "rgba(0,0,0,0.3)",
+                    color: onlineVisionModel === "gemini" ? "#a78bfa" : "#aaa",
+                    cursor: "pointer", transition: "all 0.2s", fontWeight: onlineVisionModel === "gemini" ? 600 : 400,
+                    boxShadow: onlineVisionModel === "gemini" ? "inset 0 0 0 1px #7c3aed" : "none"
+                  }}
+                >
+                  Gemini
+                </button>
+                <button
+                  onClick={() => setOnlineVisionModel("nvidia")}
+                  style={{
+                    flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)",
+                    backgroundColor: onlineVisionModel === "nvidia" ? "rgba(16, 185, 129, 0.2)" : "rgba(0,0,0,0.3)",
+                    color: onlineVisionModel === "nvidia" ? "#34d399" : "#aaa",
+                    cursor: "pointer", transition: "all 0.2s", fontWeight: onlineVisionModel === "nvidia" ? 600 : 400,
+                    boxShadow: onlineVisionModel === "nvidia" ? "inset 0 0 0 1px #10b981" : "none"
+                  }}
+                >
+                  NVIDIA (Phi-4)
+                </button>
+              </div>
+              <div style={{ fontSize: "11px", color: "#888", marginTop: "8px" }}>
+                {onlineVisionModel === "nvidia" 
+                  ? "Uses NVIDIA's microsoft/phi-4-multimodal-instruct API. Requires NVIDIA_API_KEY in .env." 
+                  : "Uses Google's Gemini 3 Flash Preview. Requires GEMINI_API_KEY in .env."}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button 
+                onClick={() => setShowSettings(false)}
+                style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: "#7c3aed", color: "white", cursor: "pointer", fontSize: "13px", fontWeight: 500, transition: "all 0.2s" }}
+              >Done</button>
             </div>
           </div>
         </div>

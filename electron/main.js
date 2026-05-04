@@ -57,7 +57,7 @@ app.whenReady().then(() => {
     // Keep the app hidden while the renderer grabs the frame.
     restoreTimer = setTimeout(() => {
       restoreWindowAfterCapture();
-    }, 4000);
+    }, 2000);
 
     try {
       setTimeout(async () => {

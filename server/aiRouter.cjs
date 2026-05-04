@@ -7,6 +7,15 @@ const OLLAMA_BASE         = process.env.OLLAMA_BASE         || "http://127.0.0.1
 const OLLAMA_MODEL        = process.env.OLLAMA_MODEL        || "llama3.2:latest";
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || "llava:latest";
 
+// OpenRouter config (online text generation)
+const OPENROUTER_API_KEY  = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_MODEL    = process.env.OPENROUTER_MODEL    || "nvidia/nemotron-nano-9b-v2:free";
+const OPENROUTER_API_BASE = "https://openrouter.ai/api/v1";
+
+// NVIDIA config (online vision generation)
+const NVIDIA_API_KEY      = process.env.NVIDIA_API_KEY;
+const NVIDIA_API_BASE     = "https://integrate.api.nvidia.com/v1";
+
 // ── Non-streaming (kept for /analyze) ────────────────────────────────────────
 async function analyze(image, prompt, mode = "online", systemPrompt = null) {
   if (image) {
@@ -14,11 +23,15 @@ async function analyze(image, prompt, mode = "online", systemPrompt = null) {
       ? await callOllamaVisionModel(image, prompt, systemPrompt)
       : await callGeminiModel(image, prompt, systemPrompt);
   }
+  // Text-only: online → OpenRouter, offline → local Ollama
+  if (mode === "online") {
+    return await callOpenRouterModel(prompt, systemPrompt);
+  }
   return await callOllamaModel(prompt, systemPrompt);
 }
 
 // ── Streaming entry point (/analyze-stream) ───────────────────────────────────
-async function analyzeStream(image, prompt, mode = "online", systemPrompt = null, expressRes) {
+async function analyzeStream(image, prompt, mode = "online", systemPrompt = null, onlineVisionModel = "gemini", expressRes) {
   // SSE headers
   expressRes.setHeader("Content-Type", "text/event-stream");
   expressRes.setHeader("Cache-Control", "no-cache");
@@ -31,13 +44,21 @@ async function analyzeStream(image, prompt, mode = "online", systemPrompt = null
       if (mode === "offline") {
         return await streamOllamaVision(image, prompt, systemPrompt, expressRes);
       } else {
-        // Gemini: get full response then emit as one event
-        const text = await callGeminiModel(image, prompt, systemPrompt);
-        sendSSE(expressRes, { token: text, done: true });
-        expressRes.end();
-        return text;
+        if (onlineVisionModel === "nvidia") {
+          return await streamNvidiaVision(image, prompt, systemPrompt, expressRes);
+        } else {
+          // Gemini: get full response then emit as one event
+          const text = await callGeminiModel(image, prompt, systemPrompt);
+          sendSSE(expressRes, { token: text, done: true });
+          expressRes.end();
+          return text;
+        }
       }
     } else {
+      // Text-only: online → OpenRouter streaming, offline → local Ollama streaming
+      if (mode === "online") {
+        return await streamOpenRouterText(prompt, systemPrompt, expressRes);
+      }
       return await streamOllamaText(prompt, systemPrompt, expressRes);
     }
   } catch (err) {
@@ -49,6 +70,155 @@ async function analyzeStream(image, prompt, mode = "online", systemPrompt = null
   }
 }
 
+
+// ── Streaming: OpenRouter text (online) ───────────────────────────────────────
+async function streamOpenRouterText(prompt, systemPrompt, expressRes) {
+  if (!OPENROUTER_API_KEY) throw createError("OPENROUTER_API_KEY is missing in .env.", 500);
+
+  const controller = new AbortController();
+  expressRes.on("close", () => controller.abort());
+
+  const messages = [];
+  const sys = systemPrompt || `You are an expert tutor helping a student.
+
+Default behavior:
+- Be concise but complete. Use bullet points or numbered steps where helpful.
+- Match response length to the complexity of the question. Don't add unnecessary filler.
+
+If the user explicitly asks to "elaborate", "explain in detail", "step-by-step", or "more details", provide a thorough response.`;
+
+  messages.push({ role: "system", content: sys });
+  messages.push({ role: "user", content: prompt });
+
+  let axiosRes;
+  try {
+    axiosRes = await axios.post(
+      `${OPENROUTER_API_BASE}/chat/completions`,
+      {
+        model: OPENROUTER_MODEL,
+        messages,
+        stream: true,
+        temperature: 0.2,
+        max_tokens: 4096
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "http://localhost:5000",
+          "X-Title": "Brightlens AI"
+        },
+        responseType: "stream",
+        timeout: 300_000,
+        signal: controller.signal
+      }
+    );
+  } catch (err) {
+    if (axios.isCancel(err)) return;
+    throw normalizeOpenRouterError(err);
+  }
+
+  return pipeOpenRouterStream(axiosRes.data, expressRes);
+}
+
+// ── Pipe OpenRouter SSE → our SSE ─────────────────────────────────────────────
+function pipeOpenRouterStream(stream, expressRes) {
+  return new Promise((resolve, reject) => {
+    let buf = "";
+    let fullText = "";
+
+    stream.on("data", (chunk) => {
+      buf += chunk.toString();
+      const lines = buf.split("\n");
+      buf = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data: ")) continue;
+        const payload = trimmed.slice(6);
+        if (payload === "[DONE]") {
+          sendSSE(expressRes, { token: "", done: true });
+          if (!expressRes.writableEnded) expressRes.end();
+          return resolve(fullText);
+        }
+        try {
+          const obj = JSON.parse(payload);
+          const delta = obj.choices?.[0]?.delta?.content;
+          if (delta) {
+            fullText += delta;
+            sendSSE(expressRes, { token: delta, done: false });
+          }
+          // Check if finish_reason is set
+          if (obj.choices?.[0]?.finish_reason) {
+            sendSSE(expressRes, { token: "", done: true });
+            if (!expressRes.writableEnded) expressRes.end();
+            return resolve(fullText);
+          }
+        } catch { /* skip malformed JSON */ }
+      }
+    });
+
+    stream.on("end", () => {
+      if (!expressRes.writableEnded) {
+        sendSSE(expressRes, { token: "", done: true });
+        expressRes.end();
+      }
+      resolve(fullText);
+    });
+
+    stream.on("error", (err) => reject(normalizeOpenRouterError(err)));
+  });
+}
+
+// ── Streaming: NVIDIA vision (online) ─────────────────────────────────────────
+async function streamNvidiaVision(image, prompt, systemPrompt, expressRes) {
+  if (!NVIDIA_API_KEY) throw createError("NVIDIA_API_KEY is missing in .env.", 500);
+
+  const controller = new AbortController();
+  expressRes.on("close", () => controller.abort());
+
+  let axiosRes;
+  try {
+    // The image might not have the full data: URL if it's just base64, but parseImageData handles it.
+    const { mimeType, base64Data } = parseImageData(image);
+    const dataUrl = `data:${mimeType};base64,${base64Data}`;
+
+    axiosRes = await axios.post(
+      `${NVIDIA_API_BASE}/chat/completions`,
+      {
+        model: "microsoft/phi-4-multimodal-instruct",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: buildPrompt(prompt, systemPrompt) },
+              { type: "image_url", image_url: { url: dataUrl } }
+            ]
+          }
+        ],
+        stream: true,
+        temperature: 0.1,
+        max_tokens: 1024,
+        top_p: 0.70
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${NVIDIA_API_KEY}`,
+          "Accept": "text/event-stream",
+          "Content-Type": "application/json"
+        },
+        responseType: "stream",
+        timeout: 300_000,
+        signal: controller.signal
+      }
+    );
+  } catch (err) {
+    if (axios.isCancel(err)) return;
+    throw normalizeOpenRouterError(err); // OpenRouter error formatter works perfectly for NVIDIA's OpenAI-compatible API
+  }
+
+  return pipeOpenRouterStream(axiosRes.data, expressRes); // We can reuse OpenRouter's pipe logic
+}
 
 // ── Streaming: Ollama text (llama3.2) ─────────────────────────────────────────
 async function streamOllamaText(prompt, systemPrompt, expressRes) {
@@ -223,6 +393,48 @@ async function callOllamaModel(prompt, systemPrompt) {
   }
 }
 
+// ── Non-streaming: OpenRouter (online text) ───────────────────────────────────
+async function callOpenRouterModel(prompt, systemPrompt) {
+  if (!OPENROUTER_API_KEY) throw createError("OPENROUTER_API_KEY is missing in .env.", 500);
+
+  const sys = systemPrompt || `You are an expert tutor helping a student.
+
+Default behavior:
+- Be concise but complete. Use bullet points or numbered steps where helpful.
+- Match response length to the complexity of the question. Don't add unnecessary filler.
+
+If the user explicitly asks to "elaborate", "explain in detail", "step-by-step", or "more details", provide a thorough response.`;
+
+  try {
+    const res = await axios.post(
+      `${OPENROUTER_API_BASE}/chat/completions`,
+      {
+        model: OPENROUTER_MODEL,
+        messages: [
+          { role: "system", content: sys },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.2,
+        max_tokens: 4096
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "http://localhost:5000",
+          "X-Title": "Brightlens AI"
+        },
+        timeout: 300_000
+      }
+    );
+    const text = res.data?.choices?.[0]?.message?.content?.trim();
+    if (!text) throw createError("OpenRouter returned an empty response.", 502);
+    return text;
+  } catch (error) {
+    throw normalizeOpenRouterError(error);
+  }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function sendSSE(res, data) {
   if (!res.writableEnded) res.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -268,6 +480,15 @@ function normalizeOllamaError(error, model) {
   if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) return createError(`Ollama timed out. "${model}" may still be loading — try again.`, 504);
   const statusCode = error.response?.status || 500;
   const msg = error.response?.data?.error || error.response?.data?.message || error.message || "Ollama request failed.";
+  return createError(msg, statusCode);
+}
+
+function normalizeOpenRouterError(error) {
+  if (error.statusCode) return error;
+  if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") return createError("OpenRouter API is unreachable. Check your internet connection.", 503);
+  if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) return createError("OpenRouter request timed out — try again.", 504);
+  const statusCode = error.response?.status || 500;
+  const msg = error.response?.data?.error?.message || error.response?.data?.error || error.message || "OpenRouter request failed.";
   return createError(msg, statusCode);
 }
 

@@ -55,7 +55,7 @@ app.post("/analyze", async (req, res) => {
 // ── Streaming endpoint (SSE) ──────────────────────────────────────────────────
 app.post("/analyze-stream", async (req, res) => {
   try {
-    const { image, prompt, mode, systemPrompt } = req.body ?? {};
+    const { image, prompt, mode, systemPrompt, onlineVisionModel } = req.body ?? {};
 
     if (!image && !prompt) {
       return res.status(400).json({ error: "Missing image or prompt." });
@@ -69,7 +69,7 @@ app.post("/analyze-stream", async (req, res) => {
 
     const fullPrompt = historyPrefix + prompt;
 
-    const fullText = await analyzeStream(image, fullPrompt, mode, systemPrompt, res);
+    const fullText = await analyzeStream(image, fullPrompt, mode, systemPrompt, onlineVisionModel, res);
 
     if (fullText) {
       // Save prompt to DB after stream completes
