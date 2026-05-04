@@ -456,13 +456,13 @@ function App() {
                backgroundColor: imageMode === "online" ? "rgba(255,255,255,0.15)" : "transparent",
                color: imageMode === "online" ? "#fff" : "#777", transition: "all 0.2s",
                boxShadow: imageMode === "online" ? "0 2px 8px rgba(0,0,0,0.2)" : "none"
-             }}>🌐 Gemini (Online)</button>
+             }}>online</button>
              <button onClick={() => setImageMode("offline")} style={{
                padding: "6px 16px", borderRadius: "10px", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer",
                backgroundColor: imageMode === "offline" ? "rgba(255,255,255,0.15)" : "transparent",
                color: imageMode === "offline" ? "#fff" : "#777", transition: "all 0.2s",
                boxShadow: imageMode === "offline" ? "0 2px 8px rgba(0,0,0,0.2)" : "none"
-             }}>🦙 LlaVA (Local)</button>
+             }}>offline</button>
            </div>
         </div>
 

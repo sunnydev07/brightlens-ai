@@ -1,5 +1,8 @@
-const { app, BrowserWindow, globalShortcut, desktopCapturer, ipcMain } = require('electron');
+const { app, BrowserWindow, globalShortcut, desktopCapturer, ipcMain, Tray, Menu } = require('electron');
 const path = require('path');
+
+let tray = null;
+let isQuitting = false;
 
 let win;
 let captureInProgress = false;
@@ -38,10 +41,70 @@ function createWindow() {
   });
 
   win.loadURL('http://localhost:5173');
+
+  // Intercept the close event to hide the window instead
+  win.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      win.hide();
+    }
+  });
 }
 
 app.whenReady().then(() => {
   createWindow();
+
+  // Robustly resolve icon path using __dirname, which works for both dev and in app.asar for prod
+  const iconPath = path.join(__dirname, '../assets/tray-icon.png');
+  try {
+    const fs = require('fs');
+    if (fs.existsSync(iconPath)) {
+      tray = new Tray(iconPath);
+    } else {
+      throw new Error('File does not exist');
+    }
+  } catch (error) {
+    console.error('Tray icon not found, using an empty image fallback:', error.message);
+    const { nativeImage } = require('electron');
+    // Using a 1x1 transparent PNG so Windows Tray doesn't crash on empty nativeImage
+    const base64Icon = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY3jP4PgfAAWgA2Hn+rM8AAAAAElFTkSuQmCC';
+    tray = new Tray(nativeImage.createFromDataURL(base64Icon));
+  }
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Show Brightlens',
+      click: () => {
+        if (win) {
+          win.show();
+          win.focus();
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]);
+
+  tray.setToolTip('Brightlens AI');
+  tray.setContextMenu(contextMenu);
+
+  // Toggle window on single left-click
+  tray.on('click', () => {
+    if (win) {
+      if (win.isVisible()) {
+        win.hide();
+      } else {
+        win.show();
+        win.focus();
+      }
+    }
+  });
 
   ipcMain.on('SCREEN_CAPTURE_DONE', () => {
     restoreWindowAfterCapture();
@@ -115,13 +178,20 @@ app.whenReady().then(() => {
 
   globalShortcut.register('CommandOrControl+O', () => {
     if (!win || win.isDestroyed()) return;
-    if (!win.isVisible()) {
-      win.show();
+    
+    // If it is visible and currently active/focused, hide it
+    if (win.isVisible() && !win.isMinimized() && win.isFocused()) {
+      win.hide();
+    } else {
+      // Otherwise, restore/show it
+      if (!win.isVisible()) {
+        win.show();
+      }
+      if (win.isMinimized()) {
+        win.restore();
+      }
+      win.focus();
     }
-    if (win.isMinimized()) {
-      win.restore();
-    }
-    win.focus();
   });
 
   ipcMain.on('REQUEST_SCREEN_CAPTURE', doScreenCapture);
