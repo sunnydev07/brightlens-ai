@@ -23,3 +23,9 @@ test('query loading renders submitted question with compact shimmering thinking 
   assert.match(appSource, /Thinking/);
   assert.match(appSource, /thinkingShimmer/);
 });
+
+test('screen capture preview is compact so response text remains primary', () => {
+  assert.match(appSource, /visual-context-thumbnail/);
+  assert.match(appSource, /Visual Context/);
+  assert.match(appSource, /170px/);
+});
