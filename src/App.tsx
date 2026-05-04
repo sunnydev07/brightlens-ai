@@ -56,6 +56,186 @@ async function streamAnalyze(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+type ThemeName = "default" | "dracula" | "githubDark";
+
+type ThemeTokens = {
+  label: string;
+  appIcon: string;
+  appIconShadow: string;
+  topPillBg: string;
+  panel: string;
+  modal: string;
+  overlay: string;
+  border: string;
+  borderSoft: string;
+  shadow: string;
+  insetShadow: string;
+  control: string;
+  controlActive: string;
+  button: string;
+  buttonHover: string;
+  input: string;
+  response: string;
+  text: string;
+  textMuted: string;
+  textSubtle: string;
+  placeholder: string;
+  heading: string;
+  accent: string;
+  accentText: string;
+  accentSoft: string;
+  accentGlow: string;
+  smartBg: string;
+  smartText: string;
+  success: string;
+  danger: string;
+  dangerText: string;
+  dangerSoft: string;
+  markdown: {
+    text: string;
+    muted: string;
+    heading: string;
+    headingSoft: string;
+    link: string;
+    codeBg: string;
+    inlineCodeBg: string;
+  };
+};
+
+const THEMES: Record<ThemeName, ThemeTokens> = {
+  default: {
+    label: "Default",
+    appIcon: "linear-gradient(135deg, #7c3aed, #ec4899)",
+    appIconShadow: "0 2px 10px rgba(124, 58, 237, 0.4)",
+    topPillBg: "rgba(30, 30, 35, 0.75)",
+    panel: "rgba(30, 30, 35, 0.65)",
+    modal: "rgba(30, 30, 35, 0.95)",
+    overlay: "rgba(0,0,0,0.6)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderSoft: "1px solid rgba(255,255,255,0.05)",
+    shadow: "0 8px 32px rgba(0,0,0,0.4)",
+    insetShadow: "inset 0 2px 10px rgba(0,0,0,0.2)",
+    control: "rgba(0,0,0,0.4)",
+    controlActive: "rgba(255,255,255,0.15)",
+    button: "rgba(255,255,255,0.05)",
+    buttonHover: "rgba(255,255,255,0.15)",
+    input: "rgba(0,0,0,0.3)",
+    response: "rgba(255,255,255,0.04)",
+    text: "#ffffff",
+    textMuted: "#cbd5e1",
+    textSubtle: "#888888",
+    placeholder: "rgba(255,255,255,0.45)",
+    heading: "#ffffff",
+    accent: "#7c3aed",
+    accentText: "#a78bfa",
+    accentSoft: "rgba(124, 58, 237, 0.2)",
+    accentGlow: "0 2px 10px rgba(124, 58, 237, 0.4)",
+    smartBg: "rgba(234, 88, 12, 0.15)",
+    smartText: "#fb923c",
+    success: "#10b981",
+    danger: "#ef4444",
+    dangerText: "#fca5a5",
+    dangerSoft: "rgba(239,68,68,0.15)",
+    markdown: {
+      text: "#e2e8f0",
+      muted: "#cbd5e1",
+      heading: "#ffffff",
+      headingSoft: "#f1f5f9",
+      link: "#8b5cf6",
+      codeBg: "rgba(0,0,0,0.4)",
+      inlineCodeBg: "rgba(255,255,255,0.1)"
+    }
+  },
+  dracula: {
+    label: "Dracula Glass",
+    appIcon: "linear-gradient(135deg, #bd93f9, #ff79c6)",
+    appIconShadow: "0 2px 14px rgba(255, 121, 198, 0.42)",
+    topPillBg: "rgba(33, 30, 48, 0.78)",
+    panel: "rgba(40, 42, 62, 0.66)",
+    modal: "rgba(40, 42, 62, 0.96)",
+    overlay: "rgba(12,10,18,0.66)",
+    border: "1px solid rgba(189,147,249,0.2)",
+    borderSoft: "1px solid rgba(255,121,198,0.12)",
+    shadow: "0 8px 36px rgba(8, 6, 16, 0.55)",
+    insetShadow: "inset 0 2px 12px rgba(0,0,0,0.26)",
+    control: "rgba(20, 18, 31, 0.58)",
+    controlActive: "rgba(189,147,249,0.24)",
+    button: "rgba(189,147,249,0.1)",
+    buttonHover: "rgba(255,121,198,0.18)",
+    input: "rgba(20, 18, 31, 0.5)",
+    response: "rgba(68,71,90,0.32)",
+    text: "#f8f8f2",
+    textMuted: "#d6d2f0",
+    textSubtle: "#9a8fb8",
+    placeholder: "rgba(248,248,242,0.45)",
+    heading: "#f8f8f2",
+    accent: "#bd93f9",
+    accentText: "#ff79c6",
+    accentSoft: "rgba(189,147,249,0.22)",
+    accentGlow: "0 2px 14px rgba(189,147,249,0.42)",
+    smartBg: "rgba(255,184,108,0.16)",
+    smartText: "#ffb86c",
+    success: "#50fa7b",
+    danger: "#ff5555",
+    dangerText: "#ffb3b3",
+    dangerSoft: "rgba(255,85,85,0.16)",
+    markdown: {
+      text: "#f8f8f2",
+      muted: "#d6d2f0",
+      heading: "#ffffff",
+      headingSoft: "#bd93f9",
+      link: "#8be9fd",
+      codeBg: "rgba(20, 18, 31, 0.72)",
+      inlineCodeBg: "rgba(255,121,198,0.14)"
+    }
+  },
+  githubDark: {
+    label: "GitHub Dark Glass",
+    appIcon: "linear-gradient(135deg, #2f81f7, #58a6ff)",
+    appIconShadow: "0 2px 14px rgba(47,129,247,0.42)",
+    topPillBg: "rgba(13, 17, 23, 0.78)",
+    panel: "rgba(22, 27, 34, 0.68)",
+    modal: "rgba(22, 27, 34, 0.96)",
+    overlay: "rgba(1,4,9,0.66)",
+    border: "1px solid rgba(139,148,158,0.22)",
+    borderSoft: "1px solid rgba(139,148,158,0.14)",
+    shadow: "0 8px 36px rgba(1,4,9,0.52)",
+    insetShadow: "inset 0 2px 12px rgba(1,4,9,0.34)",
+    control: "rgba(1, 4, 9, 0.56)",
+    controlActive: "rgba(47,129,247,0.22)",
+    button: "rgba(139,148,158,0.1)",
+    buttonHover: "rgba(47,129,247,0.16)",
+    input: "rgba(1,4,9,0.42)",
+    response: "rgba(13,17,23,0.44)",
+    text: "#f0f6fc",
+    textMuted: "#c9d1d9",
+    textSubtle: "#8b949e",
+    placeholder: "rgba(240,246,252,0.42)",
+    heading: "#f0f6fc",
+    accent: "#2f81f7",
+    accentText: "#58a6ff",
+    accentSoft: "rgba(47,129,247,0.2)",
+    accentGlow: "0 2px 14px rgba(47,129,247,0.42)",
+    smartBg: "rgba(210,153,34,0.16)",
+    smartText: "#d29922",
+    success: "#3fb950",
+    danger: "#f85149",
+    dangerText: "#ffa198",
+    dangerSoft: "rgba(248,81,73,0.16)",
+    markdown: {
+      text: "#c9d1d9",
+      muted: "#b1bac4",
+      heading: "#f0f6fc",
+      headingSoft: "#dbeafe",
+      link: "#58a6ff",
+      codeBg: "rgba(1,4,9,0.68)",
+      inlineCodeBg: "rgba(110,118,129,0.2)"
+    }
+  }
+};
+
+const themeEntries = Object.entries(THEMES) as [ThemeName, ThemeTokens][];
+
 function App() {
   const [questionText, setQuestionText] = useState("");
   const questionTextRef = useRef("");
@@ -72,7 +252,7 @@ function App() {
   const [modes, setModes] = useState<{name: string, systemPrompt: string | null}[]>(() => {
     const saved = localStorage.getItem("brightlens_modes");
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try { return JSON.parse(saved); } catch { localStorage.removeItem("brightlens_modes"); }
     }
     return [{ name: "Default", systemPrompt: null }];
   });
@@ -84,6 +264,11 @@ function App() {
   const [onlineVisionModel, setOnlineVisionModel] = useState<"gemini" | "nvidia">(() => {
     return (localStorage.getItem("brightlens_online_vision") as "gemini" | "nvidia") || "gemini";
   });
+  const [selectedThemeName, setSelectedThemeName] = useState<ThemeName>(() => {
+    const savedTheme = localStorage.getItem("brightlens_theme") as ThemeName | null;
+    return savedTheme && savedTheme in THEMES ? savedTheme : "default";
+  });
+  const theme = THEMES[selectedThemeName];
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -113,6 +298,9 @@ function App() {
     onlineVisionModelRef.current = onlineVisionModel; 
     localStorage.setItem("brightlens_online_vision", onlineVisionModel);
   }, [onlineVisionModel]);
+  useEffect(() => {
+    localStorage.setItem("brightlens_theme", selectedThemeName);
+  }, [selectedThemeName]);
 
   // ── Auto-scroll logic ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -363,21 +551,21 @@ function App() {
 
   // ── UI ────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "16px", height: "100vh", overflow: "hidden", backgroundColor: "transparent", boxSizing: "border-box", fontFamily: "system-ui, sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "16px", height: "100vh", overflow: "hidden", backgroundColor: "transparent", boxSizing: "border-box", fontFamily: "system-ui, sans-serif", color: theme.text }}>
       
       {/* GLOBAL CONTROL PILL */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "8px 16px", borderRadius: "50px", 
-        backgroundColor: "rgba(30, 30, 35, 0.75)", backdropFilter: "blur(24px)",
-        boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
-        border: "1px solid rgba(255,255,255,0.1)",
+        backgroundColor: theme.topPillBg, backdropFilter: "blur(24px)",
+        boxShadow: theme.shadow,
+        border: theme.border,
         WebkitAppRegion: "drag", // Makes it draggable
         position: "relative", zIndex: 50
       } as React.CSSProperties}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", WebkitAppRegion: "no-drag" } as React.CSSProperties}>
            {/* Application icon (minimal) */}
-           <div style={{ width: "26px", height: "26px", borderRadius: "8px", background: "linear-gradient(135deg, #7c3aed, #ec4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: "bold", color: "#fff", boxShadow: "0 2px 10px rgba(124, 58, 237, 0.4)" }}>B</div>
+           <div style={{ width: "26px", height: "26px", borderRadius: "8px", background: theme.appIcon, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: "bold", color: "#fff", boxShadow: theme.appIconShadow }}>B</div>
            
            {/* Recording Action Button */}
            <button
@@ -385,13 +573,13 @@ function App() {
              onTouchStart={startRecording} onTouchEnd={stopRecording}
              style={{
                display: "flex", alignItems: "center", gap: "8px",
-               padding: "6px 14px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.05)",
-               backgroundColor: isRecording ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)",
-               color: isRecording ? "#fca5a5" : "#eee", fontSize: "13px", fontWeight: 500, cursor: "pointer",
+               padding: "6px 14px", borderRadius: "20px", border: theme.borderSoft,
+               backgroundColor: isRecording ? theme.dangerSoft : theme.button,
+               color: isRecording ? theme.dangerText : theme.text, fontSize: "13px", fontWeight: 500, cursor: "pointer",
                transition: "all 0.2s"
              }}
            >
-              <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: isRecording ? "#ef4444" : "#10b981", boxShadow: isRecording ? "0 0 10px #ef4444" : "0 0 10px #10b981", animation: isRecording ? "blink 1.5s infinite" : "none" }} />
+              <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: isRecording ? theme.danger : theme.success, boxShadow: isRecording ? `0 0 10px ${theme.danger}` : `0 0 10px ${theme.success}`, animation: isRecording ? "blink 1.5s infinite" : "none" }} />
               {isRecording ? "Stop Recording" : "Start Listening"}
            </button>
            
@@ -451,26 +639,26 @@ function App() {
       {/* INTEGRATED CONTENT AREA */}
       <div style={{
         display: "flex", flexDirection: "column", flex: 1, padding: "20px",
-        borderRadius: "24px", backgroundColor: "rgba(30, 30, 35, 0.65)",
-        backdropFilter: "blur(30px)", border: "1px solid rgba(255,255,255,0.08)",
-        boxShadow: "0 8px 32px rgba(0,0,0,0.4)", overflow: "hidden",
+        borderRadius: "24px", backgroundColor: theme.panel,
+        backdropFilter: "blur(30px)", border: theme.border,
+        boxShadow: theme.shadow, overflow: "hidden",
         WebkitAppRegion: "no-drag"
       } as React.CSSProperties}>
 
         {/* Sleek Vision Segmented Control */}
         <div style={{ display: "flex", justifyContent: "center", marginBottom: "24px" }}>
-           <div style={{ display: "flex", backgroundColor: "rgba(0,0,0,0.4)", borderRadius: "14px", padding: "4px", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.5)" }}>
+           <div style={{ display: "flex", backgroundColor: theme.control, borderRadius: "14px", padding: "4px", boxShadow: theme.insetShadow }}>
              <button onClick={() => setImageMode("online")} style={{
                padding: "6px 16px", borderRadius: "10px", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer",
-               backgroundColor: imageMode === "online" ? "rgba(255,255,255,0.15)" : "transparent",
-               color: imageMode === "online" ? "#fff" : "#777", transition: "all 0.2s",
-               boxShadow: imageMode === "online" ? "0 2px 8px rgba(0,0,0,0.2)" : "none"
+               backgroundColor: imageMode === "online" ? theme.controlActive : "transparent",
+               color: imageMode === "online" ? theme.text : theme.textSubtle, transition: "all 0.2s",
+               boxShadow: imageMode === "online" ? theme.accentGlow : "none"
              }}>online</button>
              <button onClick={() => setImageMode("offline")} style={{
                padding: "6px 16px", borderRadius: "10px", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer",
-               backgroundColor: imageMode === "offline" ? "rgba(255,255,255,0.15)" : "transparent",
-               color: imageMode === "offline" ? "#fff" : "#777", transition: "all 0.2s",
-               boxShadow: imageMode === "offline" ? "0 2px 8px rgba(0,0,0,0.2)" : "none"
+               backgroundColor: imageMode === "offline" ? theme.controlActive : "transparent",
+               color: imageMode === "offline" ? theme.text : theme.textSubtle, transition: "all 0.2s",
+               boxShadow: imageMode === "offline" ? theme.accentGlow : "none"
              }}>offline</button>
            </div>
         </div>
@@ -478,12 +666,12 @@ function App() {
         {/* Dynamic Context Visualizer */}
         {(loading || speechLoading) && !response && (
           <div style={{ 
-            padding: "20px", borderRadius: "16px", backgroundColor: "rgba(0,0,0,0.3)", 
-            border: "1px dashed rgba(255,255,255,0.15)", display: "flex", flexDirection: "column", 
+            padding: "20px", borderRadius: "16px", backgroundColor: theme.input, 
+            border: `1px dashed ${theme.accent}`, display: "flex", flexDirection: "column", 
             alignItems: "center", justifyContent: "center", gap: "12px", marginBottom: "20px" 
           }}>
-            <div style={{ width: "32px", height: "32px", borderRadius: "50%", border: "3px solid rgba(124, 58, 237, 0.3)", borderTopColor: "#7c3aed", animation: "spin 1s linear infinite" }} />
-            <span style={{ fontSize: "13px", color: "#a78bfa", fontWeight: 500 }}>
+            <div style={{ width: "32px", height: "32px", borderRadius: "50%", border: `3px solid ${theme.accentSoft}`, borderTopColor: theme.accent, animation: "spin 1s linear infinite" }} />
+            <span style={{ fontSize: "13px", color: theme.accentText, fontWeight: 500 }}>
               {speechLoading ? "Listening & Transcribing..." : image ? "Analyzing Visual Context..." : "Processing Command..."}
             </span>
           </div>
@@ -491,9 +679,9 @@ function App() {
 
         {/* Screenshot preview if provided */}
         {image && !loading && (
-          <div style={{ marginBottom: "20px", position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
+          <div style={{ marginBottom: "20px", position: "relative", borderRadius: "12px", overflow: "hidden", border: theme.border }}>
             <img src={image} alt="Captured context" style={{ width: "100%", display: "block" }} />
-            <div style={{ position: "absolute", bottom: "8px", right: "8px", padding: "4px 8px", backgroundColor: "rgba(0,0,0,0.6)", borderRadius: "6px", fontSize: "11px", color: "#ddd" }}>Visual Context Attached</div>
+            <div style={{ position: "absolute", bottom: "8px", right: "8px", padding: "4px 8px", backgroundColor: theme.control, borderRadius: "6px", fontSize: "11px", color: theme.textMuted }}>Visual Context Attached</div>
           </div>
         )}
 
@@ -501,22 +689,22 @@ function App() {
         {response && (
           <div style={{
             padding: "16px 20px", borderRadius: "16px", fontSize: "14px",
-            backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+            backgroundColor: theme.response, border: theme.border,
             lineHeight: "1.6", textAlign: "left", flex: 1, overflowY: "auto", marginBottom: "20px",
-            boxShadow: "inset 0 2px 10px rgba(0,0,0,0.2)"
+            boxShadow: theme.insetShadow
           }}>
             <ReactMarkdown
               components={{
-                p: ({node, ...props}) => <p style={{margin: "0 0 1em 0", color: "#e2e8f0"}} {...props} />,
-                pre: ({node, ...props}) => <pre style={{backgroundColor: "rgba(0,0,0,0.4)", padding: "16px", borderRadius: "10px", overflowX: "auto", margin: "1em 0", border: "1px solid rgba(255,255,255,0.1)"}} {...props} />,
-                code: ({node, inline, className, ...props}: any) => <code style={{backgroundColor: inline ? "rgba(255,255,255,0.1)" : "transparent", padding: inline ? "2px 6px" : 0, borderRadius: "6px", fontFamily: "ui-monospace, Consolas, monospace", fontSize: "0.9em"}} className={className} {...props} />,
-                ul: ({node, ...props}) => <ul style={{listStyleType: "disc", paddingLeft: "24px", marginBottom: "1em", color: "#cbd5e1"}} {...props} />,
-                ol: ({node, ...props}) => <ol style={{listStyleType: "decimal", paddingLeft: "24px", marginBottom: "1em", color: "#cbd5e1"}} {...props} />,
-                li: ({node, ...props}) => <li style={{marginBottom: "0.4em"}} {...props} />,
-                h1: ({node, ...props}) => <h1 style={{fontSize: "1.4em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#fff"}} {...props} />,
-                h2: ({node, ...props}) => <h2 style={{fontSize: "1.2em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#f8fafc"}} {...props} />,
-                h3: ({node, ...props}) => <h3 style={{fontSize: "1.1em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#f1f5f9"}} {...props} />,
-                a: ({node, ...props}) => <a style={{color: "#8b5cf6", textDecoration: "none", fontWeight: 500}} {...props} />
+                p: (props) => <p style={{margin: "0 0 1em 0", color: theme.markdown.text}} {...props} />,
+                pre: (props) => <pre style={{backgroundColor: theme.markdown.codeBg, padding: "16px", borderRadius: "10px", overflowX: "auto", margin: "1em 0", border: theme.border}} {...props} />,
+                code: ({inline, className, ...props}: React.ComponentPropsWithoutRef<"code"> & { inline?: boolean }) => <code style={{backgroundColor: inline ? theme.markdown.inlineCodeBg : "transparent", padding: inline ? "2px 6px" : 0, borderRadius: "6px", fontFamily: "ui-monospace, Consolas, monospace", fontSize: "0.9em", color: inline ? theme.accentText : theme.markdown.text}} className={className} {...props} />,
+                ul: (props) => <ul style={{listStyleType: "disc", paddingLeft: "24px", marginBottom: "1em", color: theme.markdown.muted}} {...props} />,
+                ol: (props) => <ol style={{listStyleType: "decimal", paddingLeft: "24px", marginBottom: "1em", color: theme.markdown.muted}} {...props} />,
+                li: (props) => <li style={{marginBottom: "0.4em"}} {...props} />,
+                h1: (props) => <h1 style={{fontSize: "1.4em", fontWeight: 600, margin: "1.2em 0 0.6em", color: theme.markdown.heading}} {...props} />,
+                h2: (props) => <h2 style={{fontSize: "1.2em", fontWeight: 600, margin: "1.2em 0 0.6em", color: theme.markdown.headingSoft}} {...props} />,
+                h3: (props) => <h3 style={{fontSize: "1.1em", fontWeight: 600, margin: "1.2em 0 0.6em", color: theme.markdown.headingSoft}} {...props} />,
+                a: (props) => <a style={{color: theme.markdown.link, textDecoration: "none", fontWeight: 500}} {...props} />
               }}
             >
               {response + (loading ? " ▌" : "")}
@@ -530,9 +718,9 @@ function App() {
 
         {/* Input Area */}
         <div style={{
-          borderRadius: "16px", border: "1px solid rgba(255,255,255,0.1)",
-          backgroundColor: "rgba(0,0,0,0.3)", overflow: "visible", position: "relative",
-          boxShadow: "inset 0 4px 10px rgba(0,0,0,0.1)"
+          borderRadius: "16px", border: theme.border,
+          backgroundColor: theme.input, overflow: "visible", position: "relative",
+          boxShadow: theme.insetShadow
         }}>
           <textarea
             id="question-input"
@@ -546,7 +734,7 @@ function App() {
             rows={2}
             style={{
               width: "100%", background: "transparent", border: "none", outline: "none",
-              color: "white",
+              color: theme.text,
               fontSize: "14px", padding: "16px 16px 44px 16px", resize: "none",
               boxSizing: "border-box", fontFamily: "inherit", lineHeight: "1.5"
             }}
@@ -568,12 +756,12 @@ function App() {
                  }}
                  style={{
                    display: "flex", alignItems: "center", gap: "4px",
-                   padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)",
-                   backgroundColor: "rgba(255,255,255,0.08)", color: "#ccc", fontSize: "12px", fontWeight: 500,
+                   padding: "6px 10px", borderRadius: "8px", border: theme.borderSoft,
+                   backgroundColor: theme.button, color: theme.textMuted, fontSize: "12px", fontWeight: 500,
                    cursor: "pointer", transition: "all 0.2s"
                  }}
-                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)"}
-                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)"}
+                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.buttonHover}
+                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.button}
               >
                 <span style={{ fontSize: "14px" }}>⛶</span> Use Screen
               </button>
@@ -582,7 +770,7 @@ function App() {
                  style={{
                    display: "flex", alignItems: "center", gap: "4px",
                    padding: "6px 10px", borderRadius: "8px", border: "none",
-                   backgroundColor: "rgba(234, 88, 12, 0.15)", color: "#fb923c", fontSize: "12px", fontWeight: 500,
+                   backgroundColor: theme.smartBg, color: theme.smartText, fontSize: "12px", fontWeight: 500,
                    cursor: "default"
                  }}
               >
@@ -595,12 +783,12 @@ function App() {
                    onClick={() => setShowModeMenu(!showModeMenu)}
                    style={{
                      display: "flex", alignItems: "center", gap: "4px",
-                     padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)",
-                     backgroundColor: showModeMenu ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.05)",
-                     color: "#ccc", fontSize: "12px", cursor: "pointer", transition: "all 0.2s"
+                     padding: "6px 10px", borderRadius: "8px", border: theme.borderSoft,
+                     backgroundColor: showModeMenu ? theme.controlActive : theme.button,
+                     color: theme.textMuted, fontSize: "12px", cursor: "pointer", transition: "all 0.2s"
                    }}
-                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)"}
-                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = showModeMenu ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.05)"}
+                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.buttonHover}
+                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = showModeMenu ? theme.controlActive : theme.button}
                 >
                   {selectedModeName} <span style={{fontSize: "10px", opacity: 0.7}}>﹀</span>
                 </button>
@@ -608,12 +796,12 @@ function App() {
                 {showModeMenu && (
                   <div style={{
                     position: "absolute", bottom: "100%", left: 0, marginBottom: "8px",
-                    backgroundColor: "rgba(30, 30, 35, 0.95)", backdropFilter: "blur(20px)",
-                    border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px",
+                    backgroundColor: theme.modal, backdropFilter: "blur(20px)",
+                    border: theme.border, borderRadius: "12px",
                     padding: "8px 0", minWidth: "160px", zIndex: 100,
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.5)"
+                    boxShadow: theme.shadow
                   }}>
-                    <div style={{ padding: "4px 12px", fontSize: "11px", color: "#888", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    <div style={{ padding: "4px 12px", fontSize: "11px", color: theme.textSubtle, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                       Your Modes
                     </div>
                     {modes.map(m => (
@@ -621,24 +809,24 @@ function App() {
                         key={m.name}
                         onClick={() => { setSelectedModeName(m.name); setShowModeMenu(false); }}
                         style={{
-                          padding: "8px 16px", fontSize: "13px", color: "#ddd", cursor: "pointer",
+                          padding: "8px 16px", fontSize: "13px", color: theme.textMuted, cursor: "pointer",
                           display: "flex", justifyContent: "space-between", alignItems: "center",
-                          backgroundColor: selectedModeName === m.name ? "rgba(255,255,255,0.06)" : "transparent"
+                          backgroundColor: selectedModeName === m.name ? theme.controlActive : "transparent"
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedModeName === m.name ? "rgba(255,255,255,0.06)" : "transparent"}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.buttonHover}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedModeName === m.name ? theme.controlActive : "transparent"}
                       >
-                        {m.name} {selectedModeName === m.name && <span style={{color: "#7c3aed"}}>✓</span>}
+                        {m.name} {selectedModeName === m.name && <span style={{color: theme.accent}}>✓</span>}
                       </div>
                     ))}
-                    <div style={{ height: "1px", backgroundColor: "rgba(255,255,255,0.1)", margin: "4px 0" }} />
+                    <div style={{ height: "1px", backgroundColor: theme.border.replace("1px solid ", ""), margin: "4px 0" }} />
                     <div 
                       onClick={() => { setShowModeMenu(false); setShowCreateMode(true); }}
                       style={{
-                        padding: "8px 16px", fontSize: "13px", color: "#fff", cursor: "pointer",
+                        padding: "8px 16px", fontSize: "13px", color: theme.text, cursor: "pointer",
                         display: "flex", alignItems: "center", gap: "6px"
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.buttonHover}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                     >
                       + Create Mode
@@ -649,12 +837,12 @@ function App() {
 
               <label title="Upload Audio" style={{
                 width: "28px", height: "28px", borderRadius: "8px",
-                backgroundColor: "rgba(255,255,255,0.05)", cursor: "pointer", color: "#aaa",
+                backgroundColor: theme.button, cursor: "pointer", color: theme.textSubtle,
                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px",
                 transition: "all 0.2s"
               }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)"}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.buttonHover}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.button}
               >
                 📎<input type="file" accept="audio/*" onChange={handleAudioUpload} style={{ display: "none" }} />
               </label>
@@ -663,11 +851,11 @@ function App() {
                 <button onClick={() => { setQuestionText(""); setResponse(""); setImage(null); setError(""); }}
                   title="Clear all" style={{
                     width: "28px", height: "28px", borderRadius: "8px", border: "none",
-                    cursor: "pointer", backgroundColor: "rgba(255,255,255,0.05)", color: "#aaa", fontSize: "12px",
+                    cursor: "pointer", backgroundColor: theme.button, color: theme.textSubtle, fontSize: "12px",
                     transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center"
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)"}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.buttonHover}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.button}
                 >✕</button>
               )}
 
@@ -675,11 +863,11 @@ function App() {
                 onClick={(e) => { e.preventDefault(); setShowSettings(true); }}
                 title="Settings" style={{
                   width: "28px", height: "28px", borderRadius: "8px", border: "none",
-                  cursor: "pointer", backgroundColor: "rgba(255,255,255,0.05)", color: "#aaa", fontSize: "14px",
+                  cursor: "pointer", backgroundColor: theme.button, color: theme.textSubtle, fontSize: "14px",
                   transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center"
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)"}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.buttonHover}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.button}
               >⚙</button>
             </div>
 
@@ -690,8 +878,8 @@ function App() {
                 style={{
                   width: "32px", height: "32px", borderRadius: "8px", border: "none",
                   cursor: "pointer",
-                  backgroundColor: "rgba(239, 68, 68, 0.2)",
-                  color: "#ef4444",
+                  backgroundColor: theme.dangerSoft,
+                  color: theme.danger,
                   fontSize: "14px", display: "flex",
                   alignItems: "center", justifyContent: "center", transition: "all 0.2s",
                 }}
@@ -706,11 +894,11 @@ function App() {
                 style={{
                   width: "32px", height: "32px", borderRadius: "8px", border: "none",
                   cursor: !questionText.trim() ? "not-allowed" : "pointer",
-                  backgroundColor: !questionText.trim() ? "rgba(255,255,255,0.05)" : "#7c3aed",
-                  color: !questionText.trim() ? "#555" : "white",
+                  backgroundColor: !questionText.trim() ? theme.button : theme.accent,
+                  color: !questionText.trim() ? theme.textSubtle : "white",
                   fontSize: "14px", display: "flex",
                   alignItems: "center", justifyContent: "center", transition: "all 0.2s",
-                  boxShadow: !questionText.trim() ? "none" : "0 2px 10px rgba(124, 58, 237, 0.4)",
+                  boxShadow: !questionText.trim() ? "none" : theme.accentGlow,
                 }}
               >
                 ➤
@@ -723,8 +911,8 @@ function App() {
         {error && (
           <div style={{
             marginTop: "12px", padding: "10px 14px", borderRadius: "8px", 
-            backgroundColor: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)",
-            color: "#fca5a5", fontSize: "13px"
+            backgroundColor: theme.dangerSoft, border: `1px solid ${theme.danger}`,
+            color: theme.dangerText, fontSize: "13px"
           }}>{error}</div>
         )}
 
@@ -736,45 +924,45 @@ function App() {
       {showCreateMode && (
         <div style={{
           position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: "rgba(0,0,0,0.6)", zIndex: 100, backdropFilter: "blur(4px)",
+          backgroundColor: theme.overlay, zIndex: 100, backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center", WebkitAppRegion: "no-drag"
         } as React.CSSProperties}>
           <div style={{
-            backgroundColor: "rgba(30, 30, 35, 0.95)", borderRadius: "16px", padding: "24px", 
-            width: "90%", maxWidth: "400px", border: "1px solid rgba(255,255,255,0.1)", color: "white",
-            boxShadow: "0 16px 40px rgba(0,0,0,0.5)"
+            backgroundColor: theme.modal, borderRadius: "16px", padding: "24px", 
+            width: "90%", maxWidth: "400px", border: theme.border, color: theme.text,
+            boxShadow: theme.shadow
           }}>
             <h2 style={{ fontSize: "18px", marginBottom: "20px", marginTop: 0, fontWeight: 600 }}>Create Mode</h2>
             <div style={{ marginBottom: "16px" }}>
-              <label style={{ display: "block", fontSize: "12px", color: "#aaa", marginBottom: "6px" }}>Name</label>
+              <label style={{ display: "block", fontSize: "12px", color: theme.textSubtle, marginBottom: "6px" }}>Name</label>
               <input 
                 type="text" 
                 value={newModeName} 
                 onChange={(e) => setNewModeName(e.target.value)} 
                 placeholder="e.g. Code Reviewer"
                 style={{
-                  width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)",
-                  backgroundColor: "rgba(0,0,0,0.3)", color: "white", boxSizing: "border-box", outline: "none"
+                  width: "100%", padding: "10px 12px", borderRadius: "8px", border: theme.border,
+                  backgroundColor: theme.input, color: theme.text, boxSizing: "border-box", outline: "none"
                 }}
               />
             </div>
             <div style={{ marginBottom: "24px" }}>
-              <label style={{ display: "block", fontSize: "12px", color: "#aaa", marginBottom: "6px" }}>System Prompt (Markdown supported)</label>
+              <label style={{ display: "block", fontSize: "12px", color: theme.textSubtle, marginBottom: "6px" }}>System Prompt (Markdown supported)</label>
               <textarea 
                 value={newModePrompt} 
                 onChange={(e) => setNewModePrompt(e.target.value)} 
                 placeholder="You are an expert code reviewer..."
                 rows={4}
                 style={{
-                  width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)",
-                  backgroundColor: "rgba(0,0,0,0.3)", color: "white", boxSizing: "border-box", resize: "vertical", fontFamily: "monospace", outline: "none"
+                  width: "100%", padding: "10px 12px", borderRadius: "8px", border: theme.border,
+                  backgroundColor: theme.input, color: theme.text, boxSizing: "border-box", resize: "vertical", fontFamily: "monospace", outline: "none"
                 }}
               />
             </div>
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button 
                 onClick={() => { setShowCreateMode(false); setNewModeName(""); setNewModePrompt(""); }}
-                style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: "rgba(255,255,255,0.1)", color: "white", cursor: "pointer", fontSize: "13px", fontWeight: 500 }}
+                style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: theme.button, color: theme.text, cursor: "pointer", fontSize: "13px", fontWeight: 500 }}
               >Cancel</button>
               <button 
                 onClick={() => {
@@ -789,8 +977,8 @@ function App() {
                 disabled={!newModeName.trim()}
                 style={{ 
                   padding: "8px 16px", borderRadius: "8px", border: "none", 
-                  backgroundColor: newModeName.trim() ? "#7c3aed" : "rgba(255,255,255,0.05)", 
-                  color: newModeName.trim() ? "white" : "#777", cursor: newModeName.trim() ? "pointer" : "not-allowed",
+                  backgroundColor: newModeName.trim() ? theme.accent : theme.button, 
+                  color: newModeName.trim() ? "white" : theme.textSubtle, cursor: newModeName.trim() ? "pointer" : "not-allowed",
                   transition: "all 0.2s", fontSize: "13px", fontWeight: 500
                 }}
               >Save</button>
@@ -803,27 +991,54 @@ function App() {
       {showSettings && (
         <div style={{
           position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: "rgba(0,0,0,0.6)", zIndex: 100, backdropFilter: "blur(4px)",
+          backgroundColor: theme.overlay, zIndex: 100, backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center", WebkitAppRegion: "no-drag"
         } as React.CSSProperties}>
           <div style={{
-            backgroundColor: "rgba(30, 30, 35, 0.95)", borderRadius: "16px", padding: "24px", 
-            width: "90%", maxWidth: "400px", border: "1px solid rgba(255,255,255,0.1)", color: "white",
-            boxShadow: "0 16px 40px rgba(0,0,0,0.5)"
+            backgroundColor: theme.modal, borderRadius: "16px", padding: "24px", 
+            width: "90%", maxWidth: "440px", border: theme.border, color: theme.text,
+            boxShadow: theme.shadow
           }}>
-            <h2 style={{ fontSize: "18px", marginBottom: "20px", marginTop: 0, fontWeight: 600 }}>Settings</h2>
+            <h2 style={{ fontSize: "18px", marginBottom: "20px", marginTop: 0, fontWeight: 600, color: theme.heading }}>Settings</h2>
             
             <div style={{ marginBottom: "24px" }}>
-              <label style={{ display: "block", fontSize: "13px", color: "#ddd", marginBottom: "8px", fontWeight: 500 }}>Online Vision Model</label>
+              <label style={{ display: "block", fontSize: "13px", color: theme.text, marginBottom: "8px", fontWeight: 500 }}>Theme</label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
+                {themeEntries.map(([themeName, themeChoice]) => {
+                  const isActive = selectedThemeName === themeName;
+                  return (
+                    <button
+                      key={themeName}
+                      onClick={() => setSelectedThemeName(themeName)}
+                      style={{
+                        padding: "10px 8px", borderRadius: "10px", border: isActive ? `1px solid ${theme.accent}` : theme.borderSoft,
+                        backgroundColor: isActive ? theme.accentSoft : theme.input,
+                        color: isActive ? theme.accentText : theme.textMuted,
+                        cursor: "pointer", transition: "all 0.2s", fontWeight: isActive ? 700 : 500,
+                        boxShadow: isActive ? theme.accentGlow : "none", fontSize: "12px"
+                      }}
+                    >
+                      {themeChoice.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: "11px", color: theme.textSubtle, marginTop: "8px" }}>
+                Choose the transparent developer theme used for controls and markdown responses.
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "24px" }}>
+              <label style={{ display: "block", fontSize: "13px", color: theme.text, marginBottom: "8px", fontWeight: 500 }}>Online Vision Model</label>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button
                   onClick={() => setOnlineVisionModel("gemini")}
                   style={{
-                    flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)",
-                    backgroundColor: onlineVisionModel === "gemini" ? "rgba(124, 58, 237, 0.2)" : "rgba(0,0,0,0.3)",
-                    color: onlineVisionModel === "gemini" ? "#a78bfa" : "#aaa",
+                    flex: 1, padding: "10px", borderRadius: "8px", border: theme.border,
+                    backgroundColor: onlineVisionModel === "gemini" ? theme.accentSoft : theme.input,
+                    color: onlineVisionModel === "gemini" ? theme.accentText : theme.textSubtle,
                     cursor: "pointer", transition: "all 0.2s", fontWeight: onlineVisionModel === "gemini" ? 600 : 400,
-                    boxShadow: onlineVisionModel === "gemini" ? "inset 0 0 0 1px #7c3aed" : "none"
+                    boxShadow: onlineVisionModel === "gemini" ? `inset 0 0 0 1px ${theme.accent}` : "none"
                   }}
                 >
                   Gemini
@@ -831,17 +1046,17 @@ function App() {
                 <button
                   onClick={() => setOnlineVisionModel("nvidia")}
                   style={{
-                    flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)",
-                    backgroundColor: onlineVisionModel === "nvidia" ? "rgba(16, 185, 129, 0.2)" : "rgba(0,0,0,0.3)",
-                    color: onlineVisionModel === "nvidia" ? "#34d399" : "#aaa",
+                    flex: 1, padding: "10px", borderRadius: "8px", border: theme.border,
+                    backgroundColor: onlineVisionModel === "nvidia" ? "rgba(16, 185, 129, 0.2)" : theme.input,
+                    color: onlineVisionModel === "nvidia" ? theme.success : theme.textSubtle,
                     cursor: "pointer", transition: "all 0.2s", fontWeight: onlineVisionModel === "nvidia" ? 600 : 400,
-                    boxShadow: onlineVisionModel === "nvidia" ? "inset 0 0 0 1px #10b981" : "none"
+                    boxShadow: onlineVisionModel === "nvidia" ? `inset 0 0 0 1px ${theme.success}` : "none"
                   }}
                 >
                   NVIDIA (Phi-4)
                 </button>
               </div>
-              <div style={{ fontSize: "11px", color: "#888", marginTop: "8px" }}>
+              <div style={{ fontSize: "11px", color: theme.textSubtle, marginTop: "8px" }}>
                 {onlineVisionModel === "nvidia" 
                   ? "Uses NVIDIA's microsoft/phi-4-multimodal-instruct API. Requires NVIDIA_API_KEY in .env." 
                   : "Uses Google's Gemini 3 Flash Preview. Requires GEMINI_API_KEY in .env."}
@@ -851,7 +1066,7 @@ function App() {
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button 
                 onClick={() => setShowSettings(false)}
-                style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: "#7c3aed", color: "white", cursor: "pointer", fontSize: "13px", fontWeight: 500, transition: "all 0.2s" }}
+                style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: theme.accent, color: "white", cursor: "pointer", fontSize: "13px", fontWeight: 500, transition: "all 0.2s", boxShadow: theme.accentGlow }}
               >Done</button>
             </div>
           </div>
