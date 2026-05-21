@@ -9,7 +9,7 @@ const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || "llava:latest";
 
 // OpenRouter config (online text generation)
 const OPENROUTER_API_KEY  = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_MODEL    = process.env.OPENROUTER_MODEL    || "nvidia/nemotron-nano-9b-v2:free";
+const OPENROUTER_MODEL    = process.env.OPENROUTER_MODEL    || "nvidia/nemotron-3-nano-30b-a3b:free";
 const OPENROUTER_API_BASE = "https://openrouter.ai/api/v1";
 
 // NVIDIA config (online vision generation)
