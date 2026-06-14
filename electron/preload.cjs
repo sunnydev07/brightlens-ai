@@ -6,5 +6,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   requestScreenCapture: () => ipcRenderer.send('REQUEST_SCREEN_CAPTURE'),
   closeApp: () => ipcRenderer.send('close-app'),
   minimizeApp: () => ipcRenderer.send('minimize-app'),
-  maximizeApp: () => ipcRenderer.send('maximize-app')
+  maximizeApp: () => ipcRenderer.send('maximize-app'),
+  miniJarvisRunCommand: (command) => ipcRenderer.invoke('miniJarvis:runCommand', command)
 });

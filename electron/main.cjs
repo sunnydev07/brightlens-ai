@@ -1,5 +1,20 @@
-const { app, BrowserWindow, globalShortcut, desktopCapturer, ipcMain, Tray, Menu } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  desktopCapturer,
+  ipcMain,
+  Tray,
+  Menu,
+  dialog,
+} = require('electron');
 const path = require('path');
+const { planToolCalls } = require('./tools/planner.cjs');
+const {
+  validateToolCall,
+  requiresConfirmation,
+} = require('./tools/safety.cjs');
+const { executeTool } = require('./tools/executor.cjs');
 
 let tray = null;
 let isQuitting = false;
@@ -7,6 +22,23 @@ let isQuitting = false;
 let win;
 let captureInProgress = false;
 let restoreTimer = null;
+
+async function confirmRiskyTool(mainWindow, tool, args) {
+  const options = {
+    type: tool.safety === 'dangerous' ? 'warning' : 'question',
+    buttons: ['Cancel', 'Allow'],
+    defaultId: 0,
+    cancelId: 0,
+    title: `Allow Brightlens tool: ${tool.name}?`,
+    message: `Brightlens wants to run: ${tool.name}`,
+    detail: JSON.stringify(args, null, 2),
+  };
+  const result = mainWindow && !mainWindow.isDestroyed()
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options);
+
+  return result.response === 1;
+}
 
 function restoreWindowAfterCapture() {
   if (!win || win.isDestroyed()) {
@@ -129,6 +161,71 @@ app.whenReady().then(() => {
       } else {
         win.maximize();
       }
+    }
+  });
+
+  ipcMain.handle('miniJarvis:runCommand', async (event, userCommand) => {
+    const command = String(userCommand || '').trim();
+    if (!command) {
+      return { ok: false, message: 'Command is required.' };
+    }
+
+    try {
+      const senderWindow = BrowserWindow.fromWebContents(event.sender);
+      const toolCalls = await planToolCalls(command);
+
+      if (toolCalls.length === 0) {
+        return { ok: false, message: 'No matching tool found.' };
+      }
+
+      const results = [];
+
+      for (const toolCall of toolCalls) {
+        const validation = validateToolCall(toolCall);
+        if (!validation.ok) {
+          results.push({
+            ok: false,
+            error: validation.reason,
+            toolCall,
+          });
+          continue;
+        }
+
+        const { tool, args } = validation;
+        if (requiresConfirmation(tool)) {
+          const allowed = await confirmRiskyTool(senderWindow, tool, args);
+          if (!allowed) {
+            results.push({
+              ok: false,
+              cancelled: true,
+              tool: tool.name,
+            });
+            continue;
+          }
+        }
+
+        try {
+          const result = await executeTool(tool.name, args);
+          results.push({ tool: tool.name, result });
+        } catch (error) {
+          results.push({
+            ok: false,
+            tool: tool.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      return {
+        ok: results.some((entry) => entry.result?.ok === true),
+        results,
+      };
+    } catch (error) {
+      console.error('Mini-Jarvis command failed:', error);
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      };
     }
   });
 
