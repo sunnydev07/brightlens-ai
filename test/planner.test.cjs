@@ -22,6 +22,10 @@ test('maps explicit supported commands to registered fallback calls', () => {
     name: 'open_app',
     arguments: { app: 'notepad' },
   });
+  assert.deepEqual(inferObviousToolCall('Open calculator.'), {
+    name: 'open_app',
+    arguments: { app: 'calculator' },
+  });
   assert.deepEqual(
     inferObviousToolCall('search the web for Ollama FunctionGemma'),
     {

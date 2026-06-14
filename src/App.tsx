@@ -68,6 +68,8 @@ function formatMiniJarvisResult(result: MiniJarvisCommandResult): string {
   return `${heading}\n\n${result.message || "No result details were returned."}`;
 }
 
+type RecordingMode = "transcription" | "jarvis";
+
 function App() {
   const [questionText, setQuestionText] = useState("");
   const questionTextRef = useRef("");
@@ -77,6 +79,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [speechLoading, setSpeechLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingMode, setRecordingMode] = useState<RecordingMode | null>(null);
   const [error, setError] = useState("");
   const [imageMode, setImageMode] = useState<"online" | "offline">("online");
 
@@ -148,31 +151,69 @@ function App() {
     setLoading(false);
   }, []);
 
-  // ── Audio transcription → fills textarea ───────────────────────────────────
+  // ── Local audio transcription and voice command routing ────────────────────
+  const runMiniJarvisCommand = useCallback(async (command: string) => {
+    if (!window.electronAPI?.miniJarvisRunCommand) {
+      throw new Error("Mini-Jarvis is only available in the Electron desktop app.");
+    }
+
+    return window.electronAPI.miniJarvisRunCommand(command);
+  }, []);
+
+  const runVoiceJarvisCommand = useCallback(async (transcript: string) => {
+    const command = transcript.trim();
+    if (!command) {
+      setError("No speech was detected. Try Voice Jarvis again.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      setResponse("");
+      setImage(null);
+      setQuestionText("");
+      autoScrollRef.current = true;
+
+      const result = await runMiniJarvisCommand(command);
+      setResponse(
+        `**Voice command:** ${command}\n\n${formatMiniJarvisResult(result)}`,
+      );
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Voice Jarvis command failed",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [runMiniJarvisCommand]);
+
   const transcribeAudioBlob = useCallback(async (audioBlob: Blob) => {
-    if (audioBlob.size === 0) { setSpeechLoading(false); return; }
+    if (audioBlob.size === 0) {
+      setSpeechLoading(false);
+      return "";
+    }
+
     try {
       setSpeechLoading(true);
       setError("");
       const formData = new FormData();
       formData.append("audio", audioBlob, "speech.webm");
       const res = await axios.post("http://localhost:5000/speech", formData);
-      const transcribed = res.data?.text || "";
-      if (transcribed) {
-        setQuestionText(prev => prev.trim() ? `${prev.trim()} ${transcribed}` : transcribed);
-      }
+      return String(res.data?.text || "").trim();
     } catch (err: unknown) {
       const msg = axios.isAxiosError(err)
         ? err.response?.data?.error || err.response?.data?.message
         : err instanceof Error ? err.message : undefined;
       setError(msg || "Speech transcription failed");
+      return "";
     } finally {
       setSpeechLoading(false);
     }
   }, []);
 
   // ── Recording ──────────────────────────────────────────────────────────────
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (mode: RecordingMode) => {
     if (isRecordingRef.current) return;
     try {
       setError("");
@@ -190,38 +231,57 @@ function App() {
         const activeStream = streamRef.current;
         activeStream?.getTracks().forEach(t => t.stop());
         streamRef.current = null;
+        recorderRef.current = null;
+        isRecordingRef.current = false;
+        setIsRecording(false);
+        setRecordingMode(null);
 
         if (totalSize < 1024 || durationMs < 250) {
           audioChunksRef.current = [];
+          if (mode === "jarvis") {
+            setError("Voice Jarvis recording was too short. Try again.");
+          }
           return;
         }
         const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         audioChunksRef.current = [];
-        await transcribeAudioBlob(blob);
+        const transcript = await transcribeAudioBlob(blob);
+        if (!transcript) {
+          if (mode === "jarvis") {
+            setError("No speech was detected. Try Voice Jarvis again.");
+          }
+          return;
+        }
+
+        if (mode === "jarvis") {
+          await runVoiceJarvisCommand(transcript);
+        } else {
+          setQuestionText(prev => (
+            prev.trim() ? `${prev.trim()} ${transcript}` : transcript
+          ));
+        }
       };
       recorder.start(200);
+      isRecordingRef.current = true;
       setIsRecording(true);
+      setRecordingMode(mode);
     } catch (err: unknown) {
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      setRecordingMode(null);
       setError(err instanceof Error ? err.message : "Unable to start recording");
     }
-  }, [transcribeAudioBlob]);
+  }, [runVoiceJarvisCommand, transcribeAudioBlob]);
 
   const stopRecording = useCallback(() => {
     const recorder = recorderRef.current;
     if (!recorder) return;
     if (recorder.state !== "inactive") { recorder.requestData(); recorder.stop(); }
+    isRecordingRef.current = false;
     setIsRecording(false);
   }, []);
 
   // ── Text-only Ask ──────────────────────────────────────────────────────────
-  const runMiniJarvisCommand = async (command: string) => {
-    if (!window.electronAPI?.miniJarvisRunCommand) {
-      throw new Error("Mini-Jarvis is only available in the Electron desktop app.");
-    }
-
-    return window.electronAPI.miniJarvisRunCommand(command);
-  };
-
   const handleAskText = async () => {
     const q = questionTextRef.current.trim();
     if (!q) { setError("Please type or record a question first."); return; }
@@ -271,7 +331,12 @@ function App() {
   const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    await transcribeAudioBlob(file);
+    const transcript = await transcribeAudioBlob(file);
+    if (transcript) {
+      setQuestionText(prev => (
+        prev.trim() ? `${prev.trim()} ${transcript}` : transcript
+      ));
+    }
     e.target.value = "";
   };
 
@@ -354,7 +419,7 @@ function App() {
       if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable) return;
       if (e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && !hotkeyActiveRef.current && !isRecordingRef.current) {
         hotkeyActiveRef.current = true;
-        startRecording();
+        void startRecording("transcription");
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -405,20 +470,71 @@ function App() {
            
            {/* Recording Action Button */}
            <button
-             onMouseDown={startRecording} onMouseUp={stopRecording}
-             onTouchStart={startRecording} onTouchEnd={stopRecording}
+             type="button"
+             onMouseDown={() => void startRecording("transcription")}
+             onMouseUp={stopRecording}
+             onMouseLeave={() => {
+               if (recordingMode === "transcription") stopRecording();
+             }}
+             onTouchStart={() => void startRecording("transcription")}
+             onTouchEnd={stopRecording}
+             disabled={
+               speechLoading
+               || loading
+               || (isRecording && recordingMode !== "transcription")
+             }
              style={{
                display: "flex", alignItems: "center", gap: "8px",
                padding: "6px 14px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.05)",
-               backgroundColor: isRecording ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)",
-               color: isRecording ? "#fca5a5" : "#eee", fontSize: "13px", fontWeight: 500, cursor: "pointer",
-               transition: "all 0.2s"
+               backgroundColor: recordingMode === "transcription" ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)",
+               color: recordingMode === "transcription" ? "#fca5a5" : "#eee", fontSize: "13px", fontWeight: 500,
+               cursor: speechLoading || loading ? "not-allowed" : "pointer",
+               opacity: speechLoading || loading ? 0.55 : 1, transition: "all 0.2s"
              }}
            >
-              <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: isRecording ? "#ef4444" : "#10b981", boxShadow: isRecording ? "0 0 10px #ef4444" : "0 0 10px #10b981", animation: isRecording ? "blink 1.5s infinite" : "none" }} />
-              {isRecording ? "Stop Recording" : "Start Listening"}
+              <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: recordingMode === "transcription" ? "#ef4444" : "#10b981", boxShadow: recordingMode === "transcription" ? "0 0 10px #ef4444" : "0 0 10px #10b981", animation: recordingMode === "transcription" ? "blink 1.5s infinite" : "none" }} />
+              {recordingMode === "transcription" ? "Stop Recording" : "Start Listening"}
            </button>
-           
+
+           <button
+             type="button"
+             aria-pressed={recordingMode === "jarvis"}
+             onClick={() => {
+               if (!window.electronAPI?.miniJarvisRunCommand) {
+                 setError("Voice Jarvis is only available in the Electron desktop app.");
+                 return;
+               }
+
+               if (recordingMode === "jarvis") {
+                 stopRecording();
+               } else if (!isRecording) {
+                 void startRecording("jarvis");
+               }
+             }}
+             disabled={
+               speechLoading
+               || loading
+               || (isRecording && recordingMode !== "jarvis")
+             }
+             style={{
+               display: "flex", alignItems: "center", gap: "6px",
+               padding: "6px 12px", borderRadius: "20px",
+               border: "1px solid rgba(167,139,250,0.24)",
+               backgroundColor: recordingMode === "jarvis"
+                 ? "rgba(124,58,237,0.28)"
+                 : "rgba(124,58,237,0.12)",
+               color: recordingMode === "jarvis" ? "#ddd6fe" : "#c4b5fd",
+               fontSize: "12px", fontWeight: 600,
+               cursor: speechLoading || loading ? "not-allowed" : "pointer",
+               opacity: speechLoading || loading ? 0.55 : 1,
+               transition: "all 0.2s",
+             }}
+           >
+             <span style={{ fontSize: "13px" }}>
+               {recordingMode === "jarvis" ? "■" : "◆"}
+             </span>
+             {recordingMode === "jarvis" ? "Stop Voice Jarvis" : "Voice Jarvis"}
+           </button>
 
         </div>
         

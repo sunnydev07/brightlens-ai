@@ -461,7 +461,8 @@ function inferObviousToolCall(userCommand) {
     return {
       name: 'open_app',
       arguments: {
-        app: match[1].trim().replace(/\s+app(?:lication)?$/i, ''),
+        app: withoutTrailingPunctuation(match[1])
+          .replace(/\s+app(?:lication)?$/i, ''),
       },
     };
   }
