@@ -15,6 +15,8 @@ const {
   requiresConfirmation,
 } = require('./tools/safety.cjs');
 const { executeTool } = require('./tools/executor.cjs');
+const { initializeReminders } = require('./tools/reminders.cjs');
+const { logToolAction } = require('./tools/actionLog.cjs');
 
 let tray = null;
 let isQuitting = false;
@@ -83,7 +85,8 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await initializeReminders();
   createWindow();
 
   // Robustly resolve icon path using __dirname, which works for both dev and in app.asar for prod
@@ -183,6 +186,11 @@ app.whenReady().then(() => {
       for (const toolCall of toolCalls) {
         const validation = validateToolCall(toolCall);
         if (!validation.ok) {
+          await logToolAction({
+            event: 'validation_rejected',
+            tool: toolCall?.name || toolCall?.function?.name || 'unknown',
+            result: { ok: false, error: validation.reason },
+          });
           results.push({
             ok: false,
             error: validation.reason,
@@ -192,8 +200,25 @@ app.whenReady().then(() => {
         }
 
         const { tool, args } = validation;
+        await logToolAction({
+          event: 'validated',
+          tool: tool.name,
+          safety: tool.safety,
+          args,
+        });
         if (requiresConfirmation(tool)) {
           const allowed = await confirmRiskyTool(senderWindow, tool, args);
+          await logToolAction({
+            event: 'confirmation_result',
+            tool: tool.name,
+            safety: tool.safety,
+            args,
+            result: {
+              ok: allowed,
+              cancelled: !allowed,
+              message: allowed ? 'Allowed by user.' : 'Cancelled by user.',
+            },
+          });
           if (!allowed) {
             results.push({
               ok: false,
@@ -206,8 +231,25 @@ app.whenReady().then(() => {
 
         try {
           const result = await executeTool(tool.name, args);
+          await logToolAction({
+            event: 'execution_completed',
+            tool: tool.name,
+            safety: tool.safety,
+            args,
+            result,
+          });
           results.push({ tool: tool.name, result });
         } catch (error) {
+          await logToolAction({
+            event: 'execution_failed',
+            tool: tool.name,
+            safety: tool.safety,
+            args,
+            result: {
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
           results.push({
             ok: false,
             tool: tool.name,

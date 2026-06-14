@@ -186,6 +186,32 @@ function inferObviousToolCall(userCommand) {
     return null;
   }
 
+  const withoutTrailingPunctuation = (value) => String(value)
+    .trim()
+    .replace(/[.?!]+$/, '')
+    .trim();
+  const normalizeUserPath = (value) => withoutTrailingPunctuation(value)
+    .replace(/^(?:my|the)\s+/i, '')
+    .replace(/\s+(?:folder|directory)$/i, '')
+    .trim();
+  const toMinutes = (amount, unit) => {
+    const value = Number(amount);
+    if (/^seconds?/i.test(unit)) {
+      return value / 60;
+    }
+    if (/^hours?/i.test(unit)) {
+      return value * 60;
+    }
+    if (/^days?/i.test(unit)) {
+      return value * 1440;
+    }
+    return value;
+  };
+  const toSeconds = (amount, unit) => {
+    const value = Number(amount);
+    return /^minutes?/i.test(unit) ? value * 60 : value;
+  };
+
   let match = command.match(
     /^run\s+powershell(?:\s+command)?\s+([\s\S]+)$/i,
   );
@@ -193,6 +219,200 @@ function inferObviousToolCall(userCommand) {
     return {
       name: 'run_powershell',
       arguments: { command: match[1].trim() },
+    };
+  }
+
+  if (/^(?:abort|cancel)\s+(?:the\s+)?(?:pending\s+)?(?:shutdown|restart)$/i.test(command)) {
+    return { name: 'abort_shutdown', arguments: {} };
+  }
+
+  match = command.match(
+    /^(?:shut\s*down)(?:\s+(?:the\s+)?(?:computer|pc))?(?:\s+in\s+(\d+(?:\.\d+)?)\s+(seconds?|minutes?))?$/i,
+  );
+  if (match) {
+    return {
+      name: 'shutdown_computer',
+      arguments: {
+        delay_seconds: match[1] ? toSeconds(match[1], match[2]) : 60,
+      },
+    };
+  }
+
+  match = command.match(
+    /^restart(?:\s+(?:the\s+)?(?:computer|pc))?(?:\s+in\s+(\d+(?:\.\d+)?)\s+(seconds?|minutes?))?$/i,
+  );
+  if (match) {
+    return {
+      name: 'restart_computer',
+      arguments: {
+        delay_seconds: match[1] ? toSeconds(match[1], match[2]) : 60,
+      },
+    };
+  }
+
+  match = command.match(
+    /^(?:remind\s+me|set\s+(?:a\s+)?reminder)\s+in\s+(\d+(?:\.\d+)?)\s+(seconds?|minutes?|hours?|days?)\s+(?:to|for)\s+([\s\S]+)$/i,
+  );
+  if (match) {
+    return {
+      name: 'set_reminder',
+      arguments: {
+        message: withoutTrailingPunctuation(match[3]),
+        delay_minutes: toMinutes(match[1], match[2]),
+      },
+    };
+  }
+
+  if (/^(?:list|show)(?:\s+my)?\s+reminders$/i.test(command)) {
+    return { name: 'list_reminders', arguments: {} };
+  }
+
+  match = command.match(
+    /^(?:cancel|delete)\s+reminder\s+([a-zA-Z0-9-]+)$/i,
+  );
+  if (match) {
+    return {
+      name: 'cancel_reminder',
+      arguments: { id: match[1] },
+    };
+  }
+
+  if (/^(?:take|capture|save)(?:\s+a)?\s+screenshot(?:\s+of\s+(?:the\s+)?screen)?$/i.test(command)) {
+    return { name: 'take_screenshot', arguments: {} };
+  }
+
+  if (/^(?:get|show|display)(?:\s+the)?\s+system\s+info(?:rmation)?$/i.test(command)) {
+    return { name: 'get_system_info', arguments: {} };
+  }
+
+  if (/^(?:clear|empty)(?:\s+the)?\s+clipboard$/i.test(command)) {
+    return { name: 'clear_clipboard', arguments: {} };
+  }
+
+  if (/^(?:get|show|read)(?:\s+the)?\s+clipboard(?:\s+text)?$/i.test(command)) {
+    return { name: 'get_clipboard', arguments: {} };
+  }
+
+  if (/^(?:get|show|what(?:'s|\s+is))(?:\s+the)?\s+(?:current\s+)?volume(?:\s+level)?$/i.test(command)) {
+    return { name: 'get_volume', arguments: {} };
+  }
+
+  match = command.match(
+    /^(?:set|change)(?:\s+the)?\s+volume(?:\s+(?:level))?\s+(?:to\s+)?(\d+(?:\.\d+)?)\s*%?$/i,
+  );
+  if (match) {
+    return {
+      name: 'set_volume',
+      arguments: { level: Number(match[1]) },
+    };
+  }
+
+  if (/^(?:mute|mute\s+(?:the\s+)?(?:sound|audio|volume))$/i.test(command)) {
+    return { name: 'set_mute', arguments: { muted: true } };
+  }
+
+  if (/^(?:unmute|unmute\s+(?:the\s+)?(?:sound|audio|volume))$/i.test(command)) {
+    return { name: 'set_mute', arguments: { muted: false } };
+  }
+
+  match = command.match(
+    /^(minimize|maximize|restore|focus)(?:\s+on)?\s+(?:the\s+)?(.+?)(?:\s+window)?$/i,
+  );
+  if (match) {
+    return {
+      name: 'manage_window',
+      arguments: {
+        app: withoutTrailingPunctuation(match[2]),
+        action: match[1].toLowerCase(),
+      },
+    };
+  }
+
+  match = command.match(
+    /^(?:close|quit|exit)\s+(?:the\s+)?(?:app(?:lication)?\s+)?(.+)$/i,
+  );
+  if (match) {
+    return {
+      name: 'close_app',
+      arguments: {
+        app: withoutTrailingPunctuation(match[1])
+          .replace(/\s+app(?:lication)?$/i, ''),
+      },
+    };
+  }
+
+  match = command.match(
+    /^(?:find|search\s+for)\s+files?(?:\s+(?:named|matching|containing))?\s+(.+)$/i,
+  );
+  if (match) {
+    return {
+      name: 'find_files',
+      arguments: { query: withoutTrailingPunctuation(match[1]) },
+    };
+  }
+
+  match = command.match(
+    /^(?:list|show)(?:\s+(?:the))?\s+(?:files|contents)(?:\s+(?:in|of))\s+(.+)$/i,
+  );
+  if (match) {
+    return {
+      name: 'list_directory',
+      arguments: { path: normalizeUserPath(match[1]) },
+    };
+  }
+
+  match = command.match(
+    /^create\s+(?:a\s+)?(?:new\s+)?folder\s+(.+)$/i,
+  );
+  if (match) {
+    return {
+      name: 'create_folder',
+      arguments: { path: normalizeUserPath(match[1]) },
+    };
+  }
+
+  match = command.match(
+    /^create\s+(?:a\s+)?(?:new\s+)?(?:text\s+)?file\s+(.+?)(?:\s+with\s+(?:the\s+)?(?:content|text)\s+([\s\S]+))?$/i,
+  );
+  if (match) {
+    return {
+      name: 'create_text_file',
+      arguments: {
+        path: normalizeUserPath(match[1]),
+        ...(match[2] ? { content: withoutTrailingPunctuation(match[2]) } : {}),
+      },
+    };
+  }
+
+  match = command.match(/^rename\s+(.+?)\s+to\s+([^\\/]+)$/i);
+  if (match) {
+    return {
+      name: 'rename_path',
+      arguments: {
+        path: normalizeUserPath(match[1]),
+        new_name: withoutTrailingPunctuation(match[2]),
+      },
+    };
+  }
+
+  match = command.match(/^move\s+(.+?)\s+to\s+(.+)$/i);
+  if (match) {
+    return {
+      name: 'move_path',
+      arguments: {
+        source: normalizeUserPath(match[1]),
+        destination: normalizeUserPath(match[2]),
+      },
+    };
+  }
+
+  match = command.match(
+    /^(?:delete|remove|trash)\s+(?:the\s+)?(?:file|folder|directory)?\s*(.+)$/i,
+  );
+  if (match) {
+    return {
+      name: 'delete_path',
+      arguments: { path: normalizeUserPath(match[1]) },
     };
   }
 
@@ -240,7 +460,9 @@ function inferObviousToolCall(userCommand) {
   if (match) {
     return {
       name: 'open_app',
-      arguments: { app: match[1].trim() },
+      arguments: {
+        app: match[1].trim().replace(/\s+app(?:lication)?$/i, ''),
+      },
     };
   }
 
@@ -255,6 +477,11 @@ function createSystemPrompt(toolNames) {
     'Use web_search for requests to search the web.',
     'Use youtube_search for requests to search YouTube.',
     'Use run_powershell when the user explicitly asks to run PowerShell.',
+    'Use list_directory, create_folder, create_text_file, rename_path, move_path, and delete_path for file management.',
+    'Use get_volume, set_volume, and set_mute for audio controls.',
+    'Use manage_window for minimize, maximize, restore, or focus requests.',
+    'Use close_app only when the user asks to close an application.',
+    'Use shutdown_computer or restart_computer only for explicit system power requests.',
   ].join(' ');
 }
 
