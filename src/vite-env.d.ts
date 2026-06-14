@@ -13,6 +13,21 @@ interface ElectronScreenCaptureSource {
   id: string;
 }
 
+interface MiniJarvisToolResult {
+  tool?: string;
+  result?: unknown;
+  error?: string;
+  cancelled?: boolean;
+  ok?: boolean;
+  toolCall?: unknown;
+}
+
+interface MiniJarvisCommandResult {
+  ok: boolean;
+  message?: string;
+  results?: MiniJarvisToolResult[];
+}
+
 interface Window {
   electronAPI?: {
     onScreenCapture: (callback: (event: unknown, source: ElectronScreenCaptureSource) => void) => void;
@@ -21,5 +36,6 @@ interface Window {
     closeApp?: () => void;
     minimizeApp?: () => void;
     maximizeApp?: () => void;
+    miniJarvisRunCommand?: (command: string) => Promise<MiniJarvisCommandResult>;
   };
 }

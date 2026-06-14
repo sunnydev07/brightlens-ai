@@ -56,6 +56,18 @@ async function streamAnalyze(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+function formatMiniJarvisResult(result: MiniJarvisCommandResult): string {
+  const heading = result.ok
+    ? "Mini-Jarvis completed the command."
+    : "Mini-Jarvis could not complete the command.";
+
+  if (result.results?.length) {
+    return `${heading}\n\n\`\`\`json\n${JSON.stringify(result.results, null, 2)}\n\`\`\``;
+  }
+
+  return `${heading}\n\n${result.message || "No result details were returned."}`;
+}
+
 function App() {
   const [questionText, setQuestionText] = useState("");
   const questionTextRef = useRef("");
@@ -202,6 +214,14 @@ function App() {
   }, []);
 
   // ── Text-only Ask ──────────────────────────────────────────────────────────
+  const runMiniJarvisCommand = async (command: string) => {
+    if (!window.electronAPI?.miniJarvisRunCommand) {
+      throw new Error("Mini-Jarvis is only available in the Electron desktop app.");
+    }
+
+    return window.electronAPI.miniJarvisRunCommand(command);
+  };
+
   const handleAskText = async () => {
     const q = questionTextRef.current.trim();
     if (!q) { setError("Please type or record a question first."); return; }
@@ -212,6 +232,19 @@ function App() {
       setImage(null);
       setQuestionText(""); // Clear input area
       autoScrollRef.current = true; // reset to true on new request
+
+      const normalizedQuestion = q.toLowerCase();
+      if (normalizedQuestion === "/jarvis" || normalizedQuestion.startsWith("/jarvis ")) {
+        const command = q.slice("/jarvis".length).trim();
+        if (!command) {
+          throw new Error("Add a command after /jarvis.");
+        }
+
+        const result = await runMiniJarvisCommand(command);
+        setResponse(formatMiniJarvisResult(result));
+        return;
+      }
+
       const currentMode = modesRef.current.find(m => m.name === selectedModeNameRef.current);
       
       const controller = new AbortController();
@@ -698,6 +731,13 @@ function App() {
             )}
           </div>
         </div>
+
+        <span style={{
+          marginTop: "8px", paddingLeft: "4px", color: "#777",
+          fontSize: "11px", textAlign: "left"
+        }}>
+          Try: /jarvis open notepad or /jarvis search YouTube for Ollama FunctionGemma
+        </span>
 
         {/* Errors */}
         {error && (
