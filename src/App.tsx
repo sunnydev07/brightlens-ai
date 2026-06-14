@@ -496,46 +496,6 @@ function App() {
               {recordingMode === "transcription" ? "Stop Recording" : "Start Listening"}
            </button>
 
-           <button
-             type="button"
-             aria-pressed={recordingMode === "jarvis"}
-             onClick={() => {
-               if (!window.electronAPI?.miniJarvisRunCommand) {
-                 setError("Voice Jarvis is only available in the Electron desktop app.");
-                 return;
-               }
-
-               if (recordingMode === "jarvis") {
-                 stopRecording();
-               } else if (!isRecording) {
-                 void startRecording("jarvis");
-               }
-             }}
-             disabled={
-               speechLoading
-               || loading
-               || (isRecording && recordingMode !== "jarvis")
-             }
-             style={{
-               display: "flex", alignItems: "center", gap: "6px",
-               padding: "6px 12px", borderRadius: "20px",
-               border: "1px solid rgba(167,139,250,0.24)",
-               backgroundColor: recordingMode === "jarvis"
-                 ? "rgba(124,58,237,0.28)"
-                 : "rgba(124,58,237,0.12)",
-               color: recordingMode === "jarvis" ? "#ddd6fe" : "#c4b5fd",
-               fontSize: "12px", fontWeight: 600,
-               cursor: speechLoading || loading ? "not-allowed" : "pointer",
-               opacity: speechLoading || loading ? 0.55 : 1,
-               transition: "all 0.2s",
-             }}
-           >
-             <span style={{ fontSize: "13px" }}>
-               {recordingMode === "jarvis" ? "■" : "◆"}
-             </span>
-             {recordingMode === "jarvis" ? "Stop Voice Jarvis" : "Voice Jarvis"}
-           </button>
-
         </div>
         
         {/* Window Controls */}
@@ -812,39 +772,122 @@ function App() {
               )}
             </div>
 
-            {loading ? (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "4px",
+              padding: "2px", borderRadius: "22px",
+              backgroundColor: "rgba(255,255,255,0.04)"
+            }}>
               <button
-                onClick={stopGeneration}
-                title="Stop Generation"
+                type="button"
+                aria-label={recordingMode === "jarvis" ? "Stop Voice Jarvis" : "Start Voice Jarvis"}
+                aria-pressed={recordingMode === "jarvis"}
+                title={recordingMode === "jarvis" ? "Stop Voice Jarvis" : "Voice Jarvis"}
+                onClick={() => {
+                  if (!window.electronAPI?.miniJarvisRunCommand) {
+                    setError("Voice Jarvis is only available in the Electron desktop app.");
+                    return;
+                  }
+
+                  if (recordingMode === "jarvis") {
+                    stopRecording();
+                  } else if (!isRecording) {
+                    void startRecording("jarvis");
+                  }
+                }}
+                disabled={
+                  speechLoading
+                  || loading
+                  || (isRecording && recordingMode !== "jarvis")
+                }
                 style={{
-                  width: "32px", height: "32px", borderRadius: "8px", border: "none",
-                  cursor: "pointer",
-                  backgroundColor: "rgba(239, 68, 68, 0.2)",
-                  color: "#ef4444",
-                  fontSize: "14px", display: "flex",
-                  alignItems: "center", justifyContent: "center", transition: "all 0.2s",
+                  width: "34px", height: "34px", borderRadius: "50%",
+                  border: "none", display: "flex", alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: recordingMode === "jarvis"
+                    ? "rgba(239,68,68,0.18)"
+                    : "transparent",
+                  color: recordingMode === "jarvis" ? "#fb7185" : "#9ca3af",
+                  cursor: speechLoading || loading ? "not-allowed" : "pointer",
+                  opacity: speechLoading || loading ? 0.45 : 1,
+                  transition: "all 0.2s",
+                  boxShadow: recordingMode === "jarvis"
+                    ? "0 0 0 1px rgba(251,113,133,0.25), 0 0 14px rgba(239,68,68,0.18)"
+                    : "none",
                 }}
               >
-                ■
+                {recordingMode === "jarvis" ? (
+                  <span style={{
+                    width: "9px", height: "9px", borderRadius: "2px",
+                    backgroundColor: "currentColor"
+                  }} />
+                ) : (
+                  <svg
+                    aria-hidden="true"
+                    width="19"
+                    height="19"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="9" y="2" width="6" height="12" rx="3" />
+                    <path d="M5 10a7 7 0 0 0 14 0" />
+                    <path d="M12 17v5" />
+                    <path d="M8 22h8" />
+                  </svg>
+                )}
               </button>
-            ) : (
-              <button
-                onClick={handleAskText}
-                disabled={!questionText.trim()}
-                title="Send (Enter)"
-                style={{
-                  width: "32px", height: "32px", borderRadius: "8px", border: "none",
-                  cursor: !questionText.trim() ? "not-allowed" : "pointer",
-                  backgroundColor: !questionText.trim() ? "rgba(255,255,255,0.05)" : "#7c3aed",
-                  color: !questionText.trim() ? "#555" : "white",
-                  fontSize: "14px", display: "flex",
-                  alignItems: "center", justifyContent: "center", transition: "all 0.2s",
-                  boxShadow: !questionText.trim() ? "none" : "0 2px 10px rgba(124, 58, 237, 0.4)",
-                }}
-              >
-                ➤
-              </button>
-            )}
+
+              {loading ? (
+                <button
+                  onClick={stopGeneration}
+                  title="Stop Generation"
+                  style={{
+                    width: "36px", height: "36px", borderRadius: "50%", border: "none",
+                    cursor: "pointer", backgroundColor: "#fff", color: "#171717",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.2s", boxShadow: "0 2px 10px rgba(0,0,0,0.25)"
+                  }}
+                >
+                  <span style={{
+                    width: "10px", height: "10px", borderRadius: "2px",
+                    backgroundColor: "currentColor"
+                  }} />
+                </button>
+              ) : (
+                <button
+                  onClick={handleAskText}
+                  disabled={!questionText.trim()}
+                  title="Send (Enter)"
+                  style={{
+                    width: "36px", height: "36px", borderRadius: "50%", border: "none",
+                    cursor: !questionText.trim() ? "not-allowed" : "pointer",
+                    backgroundColor: !questionText.trim() ? "rgba(255,255,255,0.08)" : "#fff",
+                    color: !questionText.trim() ? "#5f6368" : "#171717",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.2s",
+                    boxShadow: !questionText.trim() ? "none" : "0 2px 12px rgba(0,0,0,0.28)",
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 19V5" />
+                    <path d="m5 12 7-7 7 7" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
