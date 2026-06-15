@@ -45,7 +45,9 @@ PowerShell commands always require confirmation.
 
 ## Safety Model
 
-FunctionGemma only plans tool calls. Electron main validates and executes them.
+Common commands are parsed into tool calls locally. Ambiguous supported
+requests can use FunctionGemma for tool-call planning. Planning never executes
+an action directly: Electron main validates every tool call before execution.
 
 Safe tools can run immediately. Risky and dangerous tools require confirmation.
 File operations are restricted to the current Windows user profile, and deletes
@@ -56,3 +58,6 @@ Local execution results and cancelled actions are saved to:
 ```text
 %USERPROFILE%\.brightlens-ai\mini-jarvis-actions.jsonl
 ```
+
+Brightlens also keeps a detailed audit log of validation, confirmation,
+execution, and failure events in Electron's user-data directory.
