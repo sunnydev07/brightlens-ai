@@ -1,115 +1,274 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+/* ============================================================================
+   LIQUID LENS — Design System
+   Premium, Apple-inspired liquid-glass desktop experience.
+   Dark-first, graphite + smoked glass + silver-white text + cool cyan accent.
+   ========================================================================== */
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+/* ----------------------------------------------------------------------------
+   Tokens — Dark theme (default)
+   -------------------------------------------------------------------------- */
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: transparent;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Brand accent — cool cyan/blue */
+  --accent: hsl(199 90% 60%);
+  --accent-strong: hsl(199 92% 66%);
+  --accent-soft: hsl(199 90% 60% / 0.16);
+  --accent-softer: hsl(199 90% 60% / 0.1);
+  --accent-border: hsl(199 90% 60% / 0.45);
+  --accent-contrast: hsl(206 40% 8%);
+  --accent-glow: hsl(199 90% 60% / 0.35);
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  /* Status hues (paired with icons/text, never color-only) */
+  --danger: hsl(0 84% 70%);
+  --danger-soft: hsl(0 84% 60% / 0.16);
+  --danger-border: hsl(0 84% 62% / 0.4);
+  --success: hsl(152 60% 55%);
+  --success-soft: hsl(152 55% 45% / 0.16);
+  --warn: hsl(36 95% 62%);
+  --warn-soft: hsl(36 95% 55% / 0.16);
+
+  /* Text */
+  --text: hsl(220 18% 92%);
+  --text-muted: hsl(220 12% 68%);
+  --text-subtle: hsl(220 10% 52%);
+  --text-faint: hsl(220 10% 40%);
+
+  /* Page backdrop (kept transparent for native Mica; scene drawn behind in browser) */
+  --app-bg: transparent;
+  --scene-1: hsl(222 24% 9%);
+  --scene-2: hsl(220 26% 6%);
+  --scene-accent: hsl(199 70% 30% / 0.18);
+
+  /* Glass materials (chrome, floating controls, menus, sheets) */
+  --glass-chrome: hsl(222 18% 14% / 0.62);
+  --glass-panel: hsl(222 18% 13% / 0.55);
+  --glass-floating: hsl(222 20% 15% / 0.86);
+  --glass-inset: hsl(222 30% 4% / 0.42);
+
+  /* More opaque surfaces for readable response content */
+  --surface: hsl(222 18% 16% / 0.94);
+  --surface-2: hsl(222 16% 19% / 0.9);
+  --surface-raised: hsl(222 16% 22%);
+
+  /* Hairlines & edge highlights */
+  --border: hsl(220 16% 100% / 0.09);
+  --border-strong: hsl(220 16% 100% / 0.16);
+  --edge-highlight: hsl(0 0% 100% / 0.08);
+  --ring: var(--accent);
+
+  /* Shadows / depth */
+  --shadow-sm: 0 1px 2px hsl(220 40% 2% / 0.4);
+  --shadow-md: 0 8px 24px hsl(220 40% 2% / 0.45);
+  --shadow-lg: 0 18px 48px hsl(220 40% 2% / 0.55);
+  --shadow-pop: 0 12px 40px hsl(220 40% 2% / 0.6);
+
+  /* Blur levels */
+  --blur-sm: 12px;
+  --blur-md: 22px;
+  --blur-lg: 34px;
+
+  /* Radii */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  /* Spacing (4 / 8 system) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+
+  /* Z-index scale */
+  --z-base: 1;
+  --z-chrome: 50;
+  --z-menu: 100;
+  --z-sheet: 200;
+  --z-dialog: 300;
+  --z-palette: 400;
+  --z-toast: 500;
+
+  /* Motion */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1: 150ms;
+  --dur-2: 220ms;
+  --dur-3: 300ms;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: transparent; /* Changed from #16171d */
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+/* ----------------------------------------------------------------------------
+   Tokens — Light theme
+   -------------------------------------------------------------------------- */
+[data-theme='light'] {
+  color-scheme: light;
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+  --accent: hsl(202 90% 44%);
+  --accent-strong: hsl(202 90% 38%);
+  --accent-soft: hsl(202 90% 44% / 0.14);
+  --accent-softer: hsl(202 90% 44% / 0.08);
+  --accent-border: hsl(202 90% 44% / 0.4);
+  --accent-contrast: hsl(0 0% 100%);
+  --accent-glow: hsl(202 90% 44% / 0.3);
+
+  --danger: hsl(0 72% 46%);
+  --danger-soft: hsl(0 72% 50% / 0.12);
+  --danger-border: hsl(0 72% 50% / 0.35);
+  --success: hsl(152 55% 36%);
+  --success-soft: hsl(152 50% 42% / 0.14);
+  --warn: hsl(32 90% 44%);
+  --warn-soft: hsl(32 90% 50% / 0.14);
+
+  --text: hsl(222 28% 14%);
+  --text-muted: hsl(222 12% 38%);
+  --text-subtle: hsl(222 10% 50%);
+  --text-faint: hsl(222 8% 62%);
+
+  --app-bg: transparent;
+  --scene-1: hsl(210 30% 96%);
+  --scene-2: hsl(210 24% 90%);
+  --scene-accent: hsl(202 80% 60% / 0.16);
+
+  --glass-chrome: hsl(210 30% 100% / 0.68);
+  --glass-panel: hsl(210 30% 100% / 0.6);
+  --glass-floating: hsl(210 30% 100% / 0.9);
+  --glass-inset: hsl(220 20% 40% / 0.08);
+
+  --surface: hsl(210 30% 100% / 0.96);
+  --surface-2: hsl(210 24% 98%);
+  --surface-raised: hsl(0 0% 100%);
+
+  --border: hsl(222 20% 10% / 0.1);
+  --border-strong: hsl(222 20% 10% / 0.18);
+  --edge-highlight: hsl(0 0% 100% / 0.6);
+
+  --shadow-sm: 0 1px 2px hsl(220 30% 40% / 0.12);
+  --shadow-md: 0 8px 24px hsl(220 30% 40% / 0.16);
+  --shadow-lg: 0 18px 48px hsl(220 30% 40% / 0.2);
+  --shadow-pop: 0 12px 40px hsl(220 30% 40% / 0.22);
 }
 
-#root {
-  width: 100%;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  height: 100vh;
-  max-height: 100vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+/* ----------------------------------------------------------------------------
+   Reset & base
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
-  background: transparent;
+}
+
+html {
+  background: var(--app-bg);
 }
 
 body {
   margin: 0;
-  background: transparent;
-  overflow: hidden; /* Prevent native scrollbars around the frameless window */
+  background: var(--app-bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: 0.1px;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Frameless window: never show native scrollbars around the shell */
+  overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
 }
 
 h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
 p {
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+/* Drag regions for the frameless Electron window */
+.drag-region {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* ----------------------------------------------------------------------------
+   Focus rings — always visible for keyboard users
+   -------------------------------------------------------------------------- */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* Screen-reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ----------------------------------------------------------------------------
+   Scrollbars
+   -------------------------------------------------------------------------- */
+.scroll-area {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.scroll-area::-webkit-scrollbar {
+  width: 8px;
+}
+.scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-area::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.scroll-area::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+  background-clip: content-box;
 }
