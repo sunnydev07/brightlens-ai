@@ -16,11 +16,15 @@ db.serialize(() => {
   `);
 
   db.run("ALTER TABLE history ADD COLUMN sessionId TEXT", (err) => {
-    // Ignore error if column already exists
+    if (err && !/duplicate column name/i.test(err.message)) {
+      console.error("DB migration error (sessionId):", err);
+    }
   });
 
   db.run("ALTER TABLE history ADD COLUMN timestamp DATETIME DEFAULT CURRENT_TIMESTAMP", (err) => {
-    // Ignore error if column already exists
+    if (err && !/duplicate column name/i.test(err.message)) {
+      console.error("DB migration error (timestamp):", err);
+    }
   });
 });
 

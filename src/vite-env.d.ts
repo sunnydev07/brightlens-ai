@@ -31,7 +31,9 @@ interface MiniJarvisCommandResult {
 
 interface Window {
   electronAPI?: {
-    onScreenCapture: (callback: (event: unknown, source: ElectronScreenCaptureSource) => void) => void;
+    onScreenCapture: (
+      callback: (event: unknown, source: ElectronScreenCaptureSource) => void,
+    ) => () => void;
     captureDone?: () => void;
     requestScreenCapture?: () => void;
     closeApp?: () => void;

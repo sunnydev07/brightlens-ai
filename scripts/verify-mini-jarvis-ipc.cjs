@@ -2,6 +2,9 @@ const fs = require('fs');
 
 const DEBUG_TARGETS_URL = process.env.BRIGHTLENS_DEBUG_TARGETS_URL
   || 'http://127.0.0.1:9222/json';
+const RENDERER_ORIGIN = new URL(
+  process.env.BRIGHTLENS_RENDERER_URL || 'http://127.0.0.1:5173',
+).origin;
 const REQUEST_TIMEOUT_MS = 90000;
 
 class CdpClient {
@@ -87,7 +90,10 @@ async function findRendererTarget() {
 
   const targets = await response.json();
   const target = targets.find(
-    (entry) => entry.type === 'page' && entry.url.includes('localhost:5173'),
+    (entry) => (
+      entry.type === 'page'
+      && new URL(entry.url).origin === RENDERER_ORIGIN
+    ),
   );
   if (!target) {
     throw new Error('Could not find the Brightlens Electron renderer target.');

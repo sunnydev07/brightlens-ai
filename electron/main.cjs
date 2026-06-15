@@ -7,8 +7,11 @@ const {
   Tray,
   Menu,
   dialog,
+  nativeImage,
+  shell,
 } = require('electron');
 const path = require('path');
+const { isTrustedRendererUrl } = require('./rendererSecurity.cjs');
 const { planToolCalls } = require('./tools/planner.cjs');
 const {
   validateToolCall,
@@ -25,6 +28,27 @@ let isQuitting = false;
 let win;
 let captureInProgress = false;
 let restoreTimer = null;
+
+const DEV_RENDERER_URL = process.env.BRIGHTLENS_RENDERER_URL
+  || 'http://127.0.0.1:5173';
+const PRODUCTION_RENDERER_FILE = path.join(__dirname, '../dist/index.html');
+const TRAY_ICON_PATH = path.join(__dirname, '../src/assets/hero.png');
+
+function isTrustedUrl(url) {
+  return isTrustedRendererUrl(url, {
+    devOrigin: DEV_RENDERER_URL,
+    productionFile: PRODUCTION_RENDERER_FILE,
+  });
+}
+
+function isTrustedIpcEvent(event) {
+  const senderUrl = event.senderFrame?.url || event.sender?.getURL?.() || '';
+  const trusted = isTrustedUrl(senderUrl);
+  if (!trusted) {
+    console.warn(`Blocked IPC request from untrusted renderer: ${senderUrl}`);
+  }
+  return trusted;
+}
 
 async function confirmRiskyTool(mainWindow, tool, args) {
   const options = {
@@ -71,11 +95,35 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#00000000',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs')
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(url)) {
+      void shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (event, url) => {
+    if (isTrustedUrl(url)) {
+      return;
+    }
+
+    event.preventDefault();
+    if (/^https?:/i.test(url)) {
+      void shell.openExternal(url);
     }
   });
 
-  win.loadURL('http://localhost:5173');
+  const loadRenderer = app.isPackaged
+    ? win.loadFile(PRODUCTION_RENDERER_FILE)
+    : win.loadURL(DEV_RENDERER_URL);
+  void loadRenderer.catch((error) => {
+    console.error('Could not load the Brightlens renderer:', error);
+  });
 
   // Intercept the close event to hide the window instead
   win.on('close', (event) => {
@@ -90,19 +138,14 @@ app.whenReady().then(async () => {
   await initializeReminders();
   createWindow();
 
-  // Robustly resolve icon path using __dirname, which works for both dev and in app.asar for prod
-  const iconPath = path.join(__dirname, '../assets/tray-icon.png');
   try {
-    const fs = require('fs');
-    if (fs.existsSync(iconPath)) {
-      tray = new Tray(iconPath);
-    } else {
-      throw new Error('File does not exist');
+    const trayImage = nativeImage.createFromPath(TRAY_ICON_PATH);
+    if (trayImage.isEmpty()) {
+      throw new Error(`Could not load ${TRAY_ICON_PATH}`);
     }
+    tray = new Tray(trayImage.resize({ width: 16, height: 16 }));
   } catch (error) {
-    console.error('Tray icon not found, using an empty image fallback:', error.message);
-    const { nativeImage } = require('electron');
-    // Using a 1x1 transparent PNG so Windows Tray doesn't crash on empty nativeImage
+    console.error('Tray icon could not be loaded, using a fallback:', error.message);
     const base64Icon = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY3jP4PgfAAWgA2Hn+rM8AAAAAElFTkSuQmCC';
     tray = new Tray(nativeImage.createFromDataURL(base64Icon));
   }
@@ -142,23 +185,27 @@ app.whenReady().then(async () => {
     }
   });
 
-  ipcMain.on('SCREEN_CAPTURE_DONE', () => {
+  ipcMain.on('SCREEN_CAPTURE_DONE', (event) => {
+    if (!isTrustedIpcEvent(event)) return;
     restoreWindowAfterCapture();
   });
 
-  ipcMain.on('close-app', () => {
+  ipcMain.on('close-app', (event) => {
+    if (!isTrustedIpcEvent(event)) return;
     if (win) {
       win.close();
     }
   });
 
-  ipcMain.on('minimize-app', () => {
+  ipcMain.on('minimize-app', (event) => {
+    if (!isTrustedIpcEvent(event)) return;
     if (win) {
       win.minimize();
     }
   });
 
-  ipcMain.on('maximize-app', () => {
+  ipcMain.on('maximize-app', (event) => {
+    if (!isTrustedIpcEvent(event)) return;
     if (win) {
       if (win.isMaximized()) {
         win.unmaximize();
@@ -169,6 +216,14 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('miniJarvis:runCommand', async (event, userCommand) => {
+    if (!isTrustedIpcEvent(event)) {
+      return {
+        ok: false,
+        handled: true,
+        message: 'Blocked request from an untrusted renderer.',
+      };
+    }
+
     const command = String(userCommand || '').trim();
     if (!command) {
       return {
@@ -353,7 +408,10 @@ app.whenReady().then(async () => {
     }
   });
 
-  ipcMain.on('REQUEST_SCREEN_CAPTURE', doScreenCapture);
+  ipcMain.on('REQUEST_SCREEN_CAPTURE', (event) => {
+    if (!isTrustedIpcEvent(event)) return;
+    void doScreenCapture();
+  });
 });
 
 app.on('will-quit', () => {

@@ -240,6 +240,9 @@ function extractBase64(image) {
 }
 
 function buildPrompt(userPrompt, systemPrompt) {
+  const normalizedUserPrompt = typeof userPrompt === "string"
+    ? userPrompt.trim()
+    : "";
   const sys = systemPrompt ? systemPrompt : `You are an expert tutor helping a student.
 
 Default behavior:
@@ -250,7 +253,7 @@ If the user explicitly asks to "elaborate", "explain in detail", "step-by-step",
 
   return `${sys}
 
-User request: ${userPrompt}`;
+User request: ${normalizedUserPrompt}`;
 }
 
 function normalizeGeminiError(error) {
@@ -277,4 +280,4 @@ function createError(message, statusCode) {
   return error;
 }
 
-module.exports = { analyze, analyzeStream };
+module.exports = { analyze, analyzeStream, buildPrompt };

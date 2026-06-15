@@ -8,13 +8,78 @@ import {
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 
+const API_BASE_URL = "http://127.0.0.1:5000";
+
+type BrightlensMode = {
+  name: string;
+  systemPrompt: string | null;
+};
+
+const DEFAULT_MODES: BrightlensMode[] = [
+  { name: "Default", systemPrompt: null },
+];
+
+function loadSavedModes(): BrightlensMode[] {
+  const saved = localStorage.getItem("brightlens_modes");
+  if (!saved) return DEFAULT_MODES;
+
+  try {
+    const parsed: unknown = JSON.parse(saved);
+    if (!Array.isArray(parsed)) return DEFAULT_MODES;
+
+    const names = new Set<string>();
+    const validModes = parsed.filter((mode): mode is BrightlensMode => {
+      if (!mode || typeof mode !== "object") return false;
+      const candidate = mode as Partial<BrightlensMode>;
+      if (
+        typeof candidate.name !== "string"
+        || !candidate.name.trim()
+        || (
+          candidate.systemPrompt !== null
+          && typeof candidate.systemPrompt !== "string"
+        )
+      ) {
+        return false;
+      }
+
+      const normalizedName = candidate.name.trim().toLowerCase();
+      if (names.has(normalizedName)) return false;
+      names.add(normalizedName);
+      return true;
+    }).map((mode) => ({
+      name: mode.name.trim(),
+      systemPrompt: mode.systemPrompt?.trim() || null,
+    }));
+
+    return validModes.length > 0 ? validModes : DEFAULT_MODES;
+  } catch {
+    return DEFAULT_MODES;
+  }
+}
+
+function processSseLine(line: string, onToken: (token: string) => void) {
+  if (!line.startsWith("data: ")) return;
+  const raw = line.slice(6).trim();
+  if (!raw) return;
+
+  let data: { token?: string; error?: string };
+  try {
+    data = JSON.parse(raw) as { token?: string; error?: string };
+  } catch {
+    return;
+  }
+
+  if (data.error) throw new Error(data.error);
+  if (data.token) onToken(data.token);
+}
+
 // ── Streaming helper (module-level, no React deps) ────────────────────────────
 async function streamAnalyze(
   payload: { image?: string | null; prompt: string; mode: string; systemPrompt?: string | null },
   onToken: (t: string) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const res = await fetch("http://localhost:5000/analyze-stream", {
+  const res = await fetch(`${API_BASE_URL}/analyze-stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -26,7 +91,11 @@ async function streamAnalyze(
     throw new Error(data.error || `Server error ${res.status}`);
   }
 
-  const reader = res.body!.getReader();
+  if (!res.body) {
+    throw new Error("The server returned an empty streaming response.");
+  }
+
+  const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
 
@@ -45,18 +114,13 @@ async function streamAnalyze(
     buffer = lines.pop() || "";
 
     for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const raw = line.slice(6).trim();
-      if (!raw) continue;
-      try {
-        const data = JSON.parse(raw) as { token?: string; done?: boolean; error?: string };
-        if (data.error) throw new Error(data.error);
-        if (data.token) onToken(data.token);
-      } catch (e: unknown) {
-        // Re-throw only real errors, swallow JSON parse errors
-        if (e instanceof Error && !e.message.startsWith("{")) throw e;
-      }
+      processSseLine(line, onToken);
     }
+  }
+
+  buffer += decoder.decode();
+  for (const line of buffer.split("\n")) {
+    processSseLine(line, onToken);
   }
 }
 
@@ -120,17 +184,7 @@ function App() {
   const [imageMode, setImageMode] = useState<"online" | "offline">("online");
 
   const [showModeMenu, setShowModeMenu] = useState(false);
-  const [modes, setModes] = useState<{name: string, systemPrompt: string | null}[]>(() => {
-    const saved = localStorage.getItem("brightlens_modes");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        // Ignore invalid saved mode data and restore the default below.
-      }
-    }
-    return [{ name: "Default", systemPrompt: null }];
-  });
+  const [modes, setModes] = useState<BrightlensMode[]>(loadSavedModes);
   const [selectedModeName, setSelectedModeName] = useState("Default");
   const [showCreateMode, setShowCreateMode] = useState(false);
   const [newModeName, setNewModeName] = useState("");
@@ -141,6 +195,7 @@ function App() {
   const imageModeRef = useRef<"online" | "offline">("online");
   const streamRef = useRef<MediaStream | null>(null);
   const isRecordingRef = useRef(false);
+  const loadingRef = useRef(false);
   const hotkeyActiveRef = useRef(false);
   const recordingStartRef = useRef<number>(0);
   const autoScrollRef = useRef(true);
@@ -154,7 +209,7 @@ function App() {
 
   const selectedModeNameRef = useRef("Default");
   useEffect(() => { selectedModeNameRef.current = selectedModeName; }, [selectedModeName]);
-  const modesRef = useRef<{name: string, systemPrompt: string | null}[]>([]);
+  const modesRef = useRef<BrightlensMode[]>(modes);
   useEffect(() => { 
     modesRef.current = modes; 
     localStorage.setItem("brightlens_modes", JSON.stringify(modes));
@@ -188,6 +243,7 @@ function App() {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    loadingRef.current = false;
     setLoading(false);
   }, []);
 
@@ -207,7 +263,13 @@ function App() {
       return;
     }
 
+    if (loadingRef.current) {
+      setError("Wait for the current request to finish or stop it first.");
+      return;
+    }
+
     try {
+      loadingRef.current = true;
       setLoading(true);
       setError("");
       setResponse("");
@@ -224,6 +286,7 @@ function App() {
         err instanceof Error ? err.message : "Voice Jarvis command failed",
       );
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, [runMiniJarvisCommand]);
@@ -239,7 +302,7 @@ function App() {
       setError("");
       const formData = new FormData();
       formData.append("audio", audioBlob, "speech.webm");
-      const res = await axios.post("http://localhost:5000/speech", formData);
+      const res = await axios.post(`${API_BASE_URL}/speech`, formData);
       return String(res.data?.text || "").trim();
     } catch (err: unknown) {
       const msg = axios.isAxiosError(err)
@@ -323,9 +386,13 @@ function App() {
 
   // ── Text-only Ask ──────────────────────────────────────────────────────────
   const handleAskText = async () => {
+    if (loadingRef.current) return;
+
     const q = questionTextRef.current.trim();
     if (!q) { setError("Please type or record a question first."); return; }
+    let controller: AbortController | null = null;
     try {
+      loadingRef.current = true;
       setLoading(true);
       setError("");
       setResponse("");
@@ -352,7 +419,7 @@ function App() {
 
       const currentMode = modesRef.current.find(m => m.name === selectedModeNameRef.current);
       
-      const controller = new AbortController();
+      controller = new AbortController();
       abortControllerRef.current = controller;
 
       await streamAnalyze(
@@ -367,8 +434,11 @@ function App() {
         setError(err instanceof Error ? err.message : "Failed to get answer");
       }
     } finally {
-      if (abortControllerRef.current) abortControllerRef.current = null;
-      setLoading(false);
+      if (!controller || abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+        loadingRef.current = false;
+        setLoading(false);
+      }
     }
   };
 
@@ -393,8 +463,19 @@ function App() {
       return;
     }
 
-    electronAPI.onScreenCapture(async (_event: unknown, source: { id: string }) => {
+    const unsubscribeScreenCapture = electronAPI.onScreenCapture(async (
+      _event: unknown,
+      source: { id: string },
+    ) => {
+      if (loadingRef.current) {
+        setError("Wait for the current request to finish or stop it first.");
+        electronAPI.captureDone?.();
+        return;
+      }
+
+      let controller: AbortController | null = null;
       try {
+        loadingRef.current = true;
         setLoading(true);
         setError("");
         setResponse("");
@@ -430,7 +511,7 @@ function App() {
         const currentMode = modesRef.current.find(m => m.name === selectedModeNameRef.current);
         autoScrollRef.current = true; // reset to true on new request
 
-        const controller = new AbortController();
+        controller = new AbortController();
         abortControllerRef.current = controller;
 
         await streamAnalyze(
@@ -452,7 +533,11 @@ function App() {
           || "Failed to capture or analyze image"
         );
       } finally {
-        setLoading(false);
+        if (!controller || abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+          loadingRef.current = false;
+          setLoading(false);
+        }
         electronAPI.captureDone?.();
       }
     });
@@ -484,6 +569,7 @@ function App() {
     document.addEventListener("visibilitychange", stopIfInterrupted);
 
     return () => {
+      unsubscribeScreenCapture?.();
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", stopIfInterrupted);
@@ -670,7 +756,7 @@ function App() {
                 h1: (props) => <h1 style={{fontSize: "1.4em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#fff"}} {...withoutMarkdownNode(props)} />,
                 h2: (props) => <h2 style={{fontSize: "1.2em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#f8fafc"}} {...withoutMarkdownNode(props)} />,
                 h3: (props) => <h3 style={{fontSize: "1.1em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#f1f5f9"}} {...withoutMarkdownNode(props)} />,
-                a: (props) => <a style={{color: "#8b5cf6", textDecoration: "none", fontWeight: 500}} {...withoutMarkdownNode(props)} />
+                a: (props) => <a target="_blank" rel="noopener noreferrer" style={{color: "#8b5cf6", textDecoration: "none", fontWeight: 500}} {...withoutMarkdownNode(props)} />
               }}
             >
               {response + (loading ? " ▌" : "")}
@@ -696,7 +782,7 @@ function App() {
               if (!e.shiftKey && e.key === "Enter") { e.preventDefault(); handleAskText(); }
             }}
             placeholder="Ask about your screen..."
-            disabled={speechLoading}
+            disabled={speechLoading || loading}
             rows={2}
             style={{
               width: "100%", background: "transparent", border: "none", outline: "none",
@@ -715,6 +801,7 @@ function App() {
               alignItems: "center", minWidth: 0
             }}>
               <button
+                 disabled={loading}
                  onClick={(e) => {
                    e.preventDefault();
                    if (window.electronAPI?.requestScreenCapture) {
@@ -727,7 +814,9 @@ function App() {
                    display: "flex", alignItems: "center", gap: "4px",
                    padding: "6px clamp(6px, 1.4vw, 10px)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)",
                    backgroundColor: "rgba(255,255,255,0.08)", color: "#ccc", fontSize: "12px", fontWeight: 500,
-                   cursor: "pointer", transition: "all 0.2s"
+                   cursor: loading ? "not-allowed" : "pointer",
+                   opacity: loading ? 0.5 : 1,
+                   transition: "all 0.2s"
                  }}
                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)"}
                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)"}
@@ -1014,9 +1103,25 @@ function App() {
               >Cancel</button>
               <button 
                 onClick={() => {
-                  if (newModeName.trim()) {
-                    setModes(prev => [...prev, { name: newModeName.trim(), systemPrompt: newModePrompt.trim() }]);
-                    setSelectedModeName(newModeName.trim());
+                  const modeName = newModeName.trim();
+                  if (modeName) {
+                    if (
+                      modesRef.current.some(
+                        (mode) => mode.name.toLowerCase() === modeName.toLowerCase(),
+                      )
+                    ) {
+                      setError(`A mode named "${modeName}" already exists.`);
+                      return;
+                    }
+
+                    setModes(prev => [
+                      ...prev,
+                      {
+                        name: modeName,
+                        systemPrompt: newModePrompt.trim() || null,
+                      },
+                    ]);
+                    setSelectedModeName(modeName);
                     setShowCreateMode(false);
                     setNewModeName("");
                     setNewModePrompt("");
