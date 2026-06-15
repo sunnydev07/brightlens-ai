@@ -6,6 +6,9 @@ Mini-Jarvis desktop tools in one compact interface.
 
 ## What It Can Do
 
+- **Mini-Jarvis Windows tools**: use natural chat commands, `/jarvis`, or local
+  voice commands to open apps, search the web, use the clipboard, find files,
+  and run confirmed PowerShell commands through FunctionGemma tool calling.
 - Understand natural desktop requests without requiring `/jarvis`.
 - Execute ordered plans of up to four supported actions.
 - Open applications, websites, and searches in Chrome, Edge, or the default
@@ -81,6 +84,10 @@ ollama pull llama3.2
 ollama pull llava
 ollama pull functiongemma
 ```
+
+For Mini-Jarvis tool calling, FunctionGemma must be available locally. See the
+[Mini-Jarvis Windows guide](docs/mini-jarvis-windows.md) for usage, safety, and
+local action-log details.
 
 Create a `.env` file in the project root:
 
