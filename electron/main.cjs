@@ -17,6 +17,7 @@ const {
 const { executeTool } = require('./tools/executor.cjs');
 const { initializeReminders } = require('./tools/reminders.cjs');
 const { logToolAction } = require('./tools/actionLog.cjs');
+const { logAction } = require('./tools/logger.cjs');
 
 let tray = null;
 let isQuitting = false;
@@ -228,6 +229,7 @@ app.whenReady().then(async () => {
             },
           });
           if (!allowed) {
+            logAction({ tool: tool.name, args, cancelled: true });
             results.push({
               ok: false,
               cancelled: true,
@@ -239,6 +241,7 @@ app.whenReady().then(async () => {
 
         try {
           const result = await executeTool(tool.name, args);
+          logAction({ tool: tool.name, args, result });
           await logToolAction({
             event: 'execution_completed',
             tool: tool.name,
