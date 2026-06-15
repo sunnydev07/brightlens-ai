@@ -46,9 +46,18 @@ export interface ConversationsController {
  */
 export function useConversations(retentionDays: number): ConversationsController {
   const [store, setStore] = useState<ConversationStore>(() => loadStore(retentionDays))
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [activeId, setActiveIdState] = useState<string | null>(null)
   const storeRef = useRef(store)
   storeRef.current = store
+
+  // Mirror the active id in a ref so several appends fired in the same tick
+  // (e.g. user + assistant turns) all target the same conversation before
+  // React has flushed the state update.
+  const activeIdRef = useRef<string | null>(null)
+  const setActiveId = useCallback((id: string | null) => {
+    activeIdRef.current = id
+    setActiveIdState(id)
+  }, [])
 
   // Debounced persistence + flush on hide.
   useEffect(() => {
@@ -86,13 +95,13 @@ export function useConversations(retentionDays: number): ConversationsController
 
   const messages = active?.messages ?? []
 
-  const selectConversation = useCallback((id: string | null) => setActiveId(id), [])
+  const selectConversation = useCallback((id: string | null) => setActiveId(id), [setActiveId])
 
-  const startNewConversation = useCallback(() => setActiveId(null), [])
+  const startNewConversation = useCallback(() => setActiveId(null), [setActiveId])
 
   const appendMessage = useCallback(
     (message: ChatMessage) => {
-      let targetId = activeId
+      let targetId = activeIdRef.current
       setStore((prev) => {
         const existing = targetId
           ? prev.conversations.find((c) => c.id === targetId)
@@ -123,10 +132,10 @@ export function useConversations(retentionDays: number): ConversationsController
           ),
         }
       })
-      if (targetId && targetId !== activeId) setActiveId(targetId)
+      if (targetId && targetId !== activeIdRef.current) setActiveId(targetId)
       return { conversationId: targetId as string, messageId: message.id }
     },
-    [activeId],
+    [setActiveId],
   )
 
   const updateMessage = useCallback<ConversationsController['updateMessage']>(
@@ -175,15 +184,15 @@ export function useConversations(retentionDays: number): ConversationsController
         ...prev,
         conversations: prev.conversations.filter((c) => c.id !== id),
       }))
-      setActiveId((current) => (current === id ? null : current))
+      if (activeIdRef.current === id) setActiveId(null)
     },
-    [],
+    [setActiveId],
   )
 
   const clearAll = useCallback(() => {
     setStore({ version: 1, conversations: [] })
     setActiveId(null)
-  }, [])
+  }, [setActiveId])
 
   return {
     conversations,
