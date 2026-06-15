@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  type ComponentPropsWithoutRef,
+} from "react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 
@@ -54,14 +60,44 @@ async function streamAnalyze(
   }
 }
 
+function withoutMarkdownNode<T extends { node?: unknown }>(
+  props: T,
+): Omit<T, "node"> {
+  const { node, ...domProps } = props;
+  void node;
+  return domProps;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 function formatMiniJarvisResult(result: MiniJarvisCommandResult): string {
-  const heading = result.ok
-    ? "Mini-Jarvis completed the command."
-    : "Mini-Jarvis could not complete the command.";
+  const heading = result.ok ? "Done." : "I couldn't complete that action.";
 
   if (result.results?.length) {
+    const messages = result.results
+      .map((entry) => {
+        if (entry.error) return entry.error;
+        if (entry.cancelled) return "Action cancelled.";
+        if (!entry.result || typeof entry.result !== "object") return "";
+
+        const detail = entry.result as {
+          message?: unknown;
+          error?: unknown;
+          text?: unknown;
+        };
+        if (typeof detail.message === "string") return detail.message;
+        if (typeof detail.error === "string") return detail.error;
+        if (typeof detail.text === "string") {
+          return detail.text ? `Clipboard: ${detail.text}` : "The clipboard is empty.";
+        }
+        return "";
+      })
+      .filter(Boolean);
+
+    if (messages.length) {
+      return `${heading}\n\n${messages.join("\n")}`;
+    }
+
     return `${heading}\n\n\`\`\`json\n${JSON.stringify(result.results, null, 2)}\n\`\`\``;
   }
 
@@ -87,7 +123,11 @@ function App() {
   const [modes, setModes] = useState<{name: string, systemPrompt: string | null}[]>(() => {
     const saved = localStorage.getItem("brightlens_modes");
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // Ignore invalid saved mode data and restore the default below.
+      }
     }
     return [{ name: "Default", systemPrompt: null }];
   });
@@ -154,7 +194,7 @@ function App() {
   // ── Local audio transcription and voice command routing ────────────────────
   const runMiniJarvisCommand = useCallback(async (command: string) => {
     if (!window.electronAPI?.miniJarvisRunCommand) {
-      throw new Error("Mini-Jarvis is only available in the Electron desktop app.");
+      throw new Error("Jarvis desktop actions are only available in the Electron app.");
     }
 
     return window.electronAPI.miniJarvisRunCommand(command);
@@ -177,7 +217,7 @@ function App() {
 
       const result = await runMiniJarvisCommand(command);
       setResponse(
-        `**Voice command:** ${command}\n\n${formatMiniJarvisResult(result)}`,
+        `**You:** ${command}\n\n${formatMiniJarvisResult(result)}`,
       );
     } catch (err: unknown) {
       setError(
@@ -293,16 +333,21 @@ function App() {
       setQuestionText(""); // Clear input area
       autoScrollRef.current = true; // reset to true on new request
 
-      const normalizedQuestion = q.toLowerCase();
-      if (normalizedQuestion === "/jarvis" || normalizedQuestion.startsWith("/jarvis ")) {
-        const command = q.slice("/jarvis".length).trim();
-        if (!command) {
-          throw new Error("Add a command after /jarvis.");
-        }
+      const legacyJarvisRequest = /^\/jarvis(?:\s|$)/i.test(q);
+      const command = legacyJarvisRequest
+        ? q.replace(/^\/jarvis\b/i, "").trim()
+        : q;
 
+      if (legacyJarvisRequest && !command) {
+        throw new Error("Tell Jarvis what you want to do.");
+      }
+
+      if (window.electronAPI?.miniJarvisRunCommand) {
         const result = await runMiniJarvisCommand(command);
-        setResponse(formatMiniJarvisResult(result));
-        return;
+        if (result.handled || legacyJarvisRequest) {
+          setResponse(formatMiniJarvisResult(result));
+          return;
+        }
       }
 
       const currentMode = modesRef.current.find(m => m.name === selectedModeNameRef.current);
@@ -607,16 +652,25 @@ function App() {
           }}>
             <ReactMarkdown
               components={{
-                p: ({node, ...props}) => <p style={{margin: "0 0 1em 0", color: "#e2e8f0"}} {...props} />,
-                pre: ({node, ...props}) => <pre style={{backgroundColor: "rgba(0,0,0,0.4)", padding: "16px", borderRadius: "10px", overflowX: "auto", margin: "1em 0", border: "1px solid rgba(255,255,255,0.1)"}} {...props} />,
-                code: ({node, inline, className, ...props}: any) => <code style={{backgroundColor: inline ? "rgba(255,255,255,0.1)" : "transparent", padding: inline ? "2px 6px" : 0, borderRadius: "6px", fontFamily: "ui-monospace, Consolas, monospace", fontSize: "0.9em"}} className={className} {...props} />,
-                ul: ({node, ...props}) => <ul style={{listStyleType: "disc", paddingLeft: "24px", marginBottom: "1em", color: "#cbd5e1"}} {...props} />,
-                ol: ({node, ...props}) => <ol style={{listStyleType: "decimal", paddingLeft: "24px", marginBottom: "1em", color: "#cbd5e1"}} {...props} />,
-                li: ({node, ...props}) => <li style={{marginBottom: "0.4em"}} {...props} />,
-                h1: ({node, ...props}) => <h1 style={{fontSize: "1.4em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#fff"}} {...props} />,
-                h2: ({node, ...props}) => <h2 style={{fontSize: "1.2em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#f8fafc"}} {...props} />,
-                h3: ({node, ...props}) => <h3 style={{fontSize: "1.1em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#f1f5f9"}} {...props} />,
-                a: ({node, ...props}) => <a style={{color: "#8b5cf6", textDecoration: "none", fontWeight: 500}} {...props} />
+                p: (props) => <p style={{margin: "0 0 1em 0", color: "#e2e8f0"}} {...withoutMarkdownNode(props)} />,
+                pre: (props) => <pre style={{backgroundColor: "rgba(0,0,0,0.4)", padding: "16px", borderRadius: "10px", overflowX: "auto", margin: "1em 0", border: "1px solid rgba(255,255,255,0.1)"}} {...withoutMarkdownNode(props)} />,
+                code: (componentProps) => {
+                  const {
+                    inline,
+                    className,
+                    ...props
+                  } = withoutMarkdownNode(componentProps) as ComponentPropsWithoutRef<"code"> & {
+                    inline?: boolean;
+                  };
+                  return <code style={{backgroundColor: inline ? "rgba(255,255,255,0.1)" : "transparent", padding: inline ? "2px 6px" : 0, borderRadius: "6px", fontFamily: "ui-monospace, Consolas, monospace", fontSize: "0.9em"}} className={className} {...props} />;
+                },
+                ul: (props) => <ul style={{listStyleType: "disc", paddingLeft: "24px", marginBottom: "1em", color: "#cbd5e1"}} {...withoutMarkdownNode(props)} />,
+                ol: (props) => <ol style={{listStyleType: "decimal", paddingLeft: "24px", marginBottom: "1em", color: "#cbd5e1"}} {...withoutMarkdownNode(props)} />,
+                li: (props) => <li style={{marginBottom: "0.4em"}} {...withoutMarkdownNode(props)} />,
+                h1: (props) => <h1 style={{fontSize: "1.4em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#fff"}} {...withoutMarkdownNode(props)} />,
+                h2: (props) => <h2 style={{fontSize: "1.2em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#f8fafc"}} {...withoutMarkdownNode(props)} />,
+                h3: (props) => <h3 style={{fontSize: "1.1em", fontWeight: 600, margin: "1.2em 0 0.6em", color: "#f1f5f9"}} {...withoutMarkdownNode(props)} />,
+                a: (props) => <a style={{color: "#8b5cf6", textDecoration: "none", fontWeight: 500}} {...withoutMarkdownNode(props)} />
               }}
             >
               {response + (loading ? " ▌" : "")}
@@ -654,9 +708,12 @@ function App() {
           {/* Action Row Inside Input */}
           <div style={{
             position: "absolute", bottom: "8px", left: "12px", right: "8px",
-            display: "flex", alignItems: "center", justifyContent: "space-between"
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px"
           }}>
-            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            <div style={{
+              display: "flex", gap: "clamp(2px, 0.75vw, 6px)",
+              alignItems: "center", minWidth: 0
+            }}>
               <button
                  onClick={(e) => {
                    e.preventDefault();
@@ -668,7 +725,7 @@ function App() {
                  }}
                  style={{
                    display: "flex", alignItems: "center", gap: "4px",
-                   padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)",
+                   padding: "6px clamp(6px, 1.4vw, 10px)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)",
                    backgroundColor: "rgba(255,255,255,0.08)", color: "#ccc", fontSize: "12px", fontWeight: 500,
                    cursor: "pointer", transition: "all 0.2s"
                  }}
@@ -681,7 +738,7 @@ function App() {
               <button
                  style={{
                    display: "flex", alignItems: "center", gap: "4px",
-                   padding: "6px 10px", borderRadius: "8px", border: "none",
+                   padding: "6px clamp(6px, 1.4vw, 10px)", borderRadius: "8px", border: "none",
                    backgroundColor: "rgba(234, 88, 12, 0.15)", color: "#fb923c", fontSize: "12px", fontWeight: 500,
                    cursor: "default"
                  }}
@@ -695,7 +752,7 @@ function App() {
                    onClick={() => setShowModeMenu(!showModeMenu)}
                    style={{
                      display: "flex", alignItems: "center", gap: "4px",
-                     padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)",
+                     padding: "6px clamp(6px, 1.4vw, 10px)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)",
                      backgroundColor: showModeMenu ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.05)",
                      color: "#ccc", fontSize: "12px", cursor: "pointer", transition: "all 0.2s"
                    }}
@@ -775,7 +832,7 @@ function App() {
             <div style={{
               display: "flex", alignItems: "center", gap: "4px",
               padding: "2px", borderRadius: "22px",
-              backgroundColor: "rgba(255,255,255,0.04)"
+              backgroundColor: "rgba(255,255,255,0.04)", flexShrink: 0
             }}>
               <button
                 type="button"
@@ -784,7 +841,7 @@ function App() {
                 title={recordingMode === "jarvis" ? "Stop Voice Jarvis" : "Voice Jarvis"}
                 onClick={() => {
                   if (!window.electronAPI?.miniJarvisRunCommand) {
-                    setError("Voice Jarvis is only available in the Electron desktop app.");
+                    setError("Jarvis voice actions are only available in the Electron app.");
                     return;
                   }
 
@@ -895,7 +952,7 @@ function App() {
           marginTop: "8px", paddingLeft: "4px", color: "#777",
           fontSize: "11px", textAlign: "left"
         }}>
-          Try: /jarvis open notepad or /jarvis search YouTube for Ollama FunctionGemma
+          Try: Open Chrome, take a screenshot, or search YouTube for local AI
         </span>
 
         {/* Errors */}

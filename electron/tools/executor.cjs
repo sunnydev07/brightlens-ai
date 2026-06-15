@@ -80,14 +80,16 @@ async function executeTool(name, args) {
     case 'open_app':
       return openApp(args.app);
     case 'open_url':
-      return openUrl(args.url);
+      return openUrl(args.url, args.browser);
     case 'web_search':
       return openUrl(
         `https://www.google.com/search?q=${encodeQuery(args.query)}`,
+        args.browser,
       );
     case 'youtube_search':
       return openUrl(
         `https://www.youtube.com/results?search_query=${encodeQuery(args.query)}`,
+        args.browser,
       );
     case 'copy_to_clipboard':
       clipboard.writeText(String(args.text));

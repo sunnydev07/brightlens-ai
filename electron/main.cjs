@@ -170,7 +170,11 @@ app.whenReady().then(async () => {
   ipcMain.handle('miniJarvis:runCommand', async (event, userCommand) => {
     const command = String(userCommand || '').trim();
     if (!command) {
-      return { ok: false, message: 'Command is required.' };
+      return {
+        ok: false,
+        handled: false,
+        message: 'Tell me what you want to do.',
+      };
     }
 
     try {
@@ -178,7 +182,11 @@ app.whenReady().then(async () => {
       const toolCalls = await planToolCalls(command);
 
       if (toolCalls.length === 0) {
-        return { ok: false, message: 'No matching tool found.' };
+        return {
+          ok: false,
+          handled: false,
+          message: 'I could not match that request to a desktop action.',
+        };
       }
 
       const results = [];
@@ -196,7 +204,7 @@ app.whenReady().then(async () => {
             error: validation.reason,
             toolCall,
           });
-          continue;
+          break;
         }
 
         const { tool, args } = validation;
@@ -225,7 +233,7 @@ app.whenReady().then(async () => {
               cancelled: true,
               tool: tool.name,
             });
-            continue;
+            break;
           }
         }
 
@@ -239,6 +247,9 @@ app.whenReady().then(async () => {
             result,
           });
           results.push({ tool: tool.name, result });
+          if (result?.ok !== true) {
+            break;
+          }
         } catch (error) {
           await logToolAction({
             event: 'execution_failed',
@@ -255,17 +266,23 @@ app.whenReady().then(async () => {
             tool: tool.name,
             error: error instanceof Error ? error.message : String(error),
           });
+          break;
         }
       }
 
       return {
-        ok: results.some((entry) => entry.result?.ok === true),
+        ok: (
+          results.length === toolCalls.length
+          && results.every((entry) => entry.result?.ok === true)
+        ),
+        handled: true,
         results,
       };
     } catch (error) {
       console.error('Mini-Jarvis command failed:', error);
       return {
         ok: false,
+        handled: false,
         message: error instanceof Error ? error.message : String(error),
       };
     }

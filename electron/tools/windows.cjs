@@ -10,9 +10,11 @@ const userHome = path.resolve(os.homedir());
 const appAliases = {
   'command prompt': 'cmd.exe',
   chrome: 'chrome.exe',
+  'google chrome': 'chrome.exe',
   'control panel': 'control.exe',
   discord: 'Discord.exe',
   edge: 'msedge.exe',
+  'microsoft edge': 'msedge.exe',
   excel: 'excel.exe',
   'file explorer': 'explorer.exe',
   files: 'explorer.exe',
@@ -30,6 +32,20 @@ const appAliases = {
   'vs code': 'code.exe',
   word: 'winword.exe',
   explorer: 'explorer.exe',
+};
+
+const installedAppCandidates = {
+  chrome: [
+    process.env.ProgramFiles
+      ? path.join(process.env.ProgramFiles, 'Google', 'Chrome', 'Application', 'chrome.exe')
+      : null,
+    process.env['ProgramFiles(x86)']
+      ? path.join(process.env['ProgramFiles(x86)'], 'Google', 'Chrome', 'Application', 'chrome.exe')
+      : null,
+    process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe')
+      : null,
+  ],
 };
 
 const processAliases = {
@@ -281,22 +297,46 @@ async function runInternalPowerShell(command, env = {}, timeout = 30000) {
   );
 }
 
-async function startWindowsTarget(target) {
+async function startWindowsTarget(target, args = []) {
   await runInternalPowerShell(
-    'Start-Process -FilePath $env:BRIGHTLENS_START_TARGET',
-    { BRIGHTLENS_START_TARGET: target },
+    String.raw`
+$arguments = @()
+if ($env:BRIGHTLENS_START_ARGUMENTS) {
+  $arguments = [string[]](
+    $env:BRIGHTLENS_START_ARGUMENTS | ConvertFrom-Json
+  )
+}
+if ($arguments.Count -gt 0) {
+  Start-Process -FilePath $env:BRIGHTLENS_START_TARGET -ArgumentList $arguments
+} else {
+  Start-Process -FilePath $env:BRIGHTLENS_START_TARGET
+}
+`,
+    {
+      BRIGHTLENS_START_TARGET: target,
+      BRIGHTLENS_START_ARGUMENTS: JSON.stringify(args.map(String)),
+    },
     10000,
   );
 }
 
+function resolveAppTarget(app) {
+  const requestedApp = String(app).trim();
+  const appKey = requestedApp.toLowerCase();
+  const candidateKey = appKey === 'google chrome' ? 'chrome' : appKey;
+  const installedTarget = installedAppCandidates[candidateKey]
+    ?.find((candidate) => candidate && fs.existsSync(candidate));
+  return installedTarget || appAliases[appKey] || requestedApp;
+}
+
 async function openApp(app) {
   const requestedApp = String(app).trim();
-  const target = appAliases[requestedApp.toLowerCase()] || requestedApp;
+  const target = resolveAppTarget(requestedApp);
   await startWindowsTarget(target);
   return { ok: true, message: `Opened ${requestedApp}` };
 }
 
-async function openUrl(url) {
+async function openUrl(url, browser) {
   const requestedUrl = String(url).trim();
   const normalized = /^https?:\/\//i.test(requestedUrl)
     ? requestedUrl
@@ -305,6 +345,16 @@ async function openUrl(url) {
 
   if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
     throw new Error(`Unsupported URL protocol: ${parsedUrl.protocol}`);
+  }
+
+  if (browser) {
+    const requestedBrowser = String(browser).trim();
+    const browserTarget = resolveAppTarget(requestedBrowser);
+    await startWindowsTarget(browserTarget, [parsedUrl.toString()]);
+    return {
+      ok: true,
+      message: `Opened ${parsedUrl.toString()} in ${requestedBrowser}`,
+    };
   }
 
   await startWindowsTarget(parsedUrl.toString());
@@ -660,6 +710,7 @@ module.exports = {
   openApp,
   openUrl,
   renamePath,
+  resolveAppTarget,
   resolveSafeUserPath,
   runPowerShell,
   scheduleShutdown,

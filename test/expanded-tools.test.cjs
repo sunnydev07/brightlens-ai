@@ -16,6 +16,7 @@ const {
   listDirectory,
   movePath,
   renamePath,
+  resolveAppTarget,
   resolveSafeUserPath,
 } = require('../electron/tools/windows.cjs');
 
@@ -154,6 +155,25 @@ test('rejects invalid control arguments and protected process names', () => {
     name: 'close_app',
     arguments: { app: 'explorer.exe' },
   }).ok, false);
+  assert.equal(validateToolCall({
+    name: 'open_url',
+    arguments: {
+      url: 'https://www.youtube.com',
+      browser: 'chrome',
+    },
+  }).ok, true);
+  assert.equal(validateToolCall({
+    name: 'open_app',
+    arguments: { app: 'chrome and youtube inside it' },
+  }).ok, false);
+});
+
+test('resolves common Chrome names to a launchable executable target', () => {
+  assert.equal(path.basename(resolveAppTarget('chrome')).toLowerCase(), 'chrome.exe');
+  assert.equal(
+    path.basename(resolveAppTarget('Google Chrome')).toLowerCase(),
+    'chrome.exe',
+  );
 });
 
 test('limits file operations to the current user profile', async () => {

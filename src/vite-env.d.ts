@@ -24,6 +24,7 @@ interface MiniJarvisToolResult {
 
 interface MiniJarvisCommandResult {
   ok: boolean;
+  handled: boolean;
   message?: string;
   results?: MiniJarvisToolResult[];
 }

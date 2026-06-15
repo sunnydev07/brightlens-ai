@@ -24,6 +24,10 @@ const tools = [
       type: 'object',
       properties: {
         url: { type: 'string', description: 'URL to open.' },
+        browser: {
+          type: 'string',
+          description: 'Optional browser name, e.g. chrome or edge.',
+        },
       },
       required: ['url'],
     },
@@ -36,6 +40,10 @@ const tools = [
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Search query.' },
+        browser: {
+          type: 'string',
+          description: 'Optional browser name, e.g. chrome or edge.',
+        },
       },
       required: ['query'],
     },
@@ -48,6 +56,10 @@ const tools = [
       type: 'object',
       properties: {
         query: { type: 'string', description: 'YouTube search query.' },
+        browser: {
+          type: 'string',
+          description: 'Optional browser name, e.g. chrome or edge.',
+        },
       },
       required: ['query'],
     },

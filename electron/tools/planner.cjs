@@ -9,8 +9,16 @@ const TOOL_MODEL = process.env.BRIGHTLENS_TOOL_MODEL || 'functiongemma';
 const PLANNER_TIMEOUT_MS = Number(
   process.env.BRIGHTLENS_TOOL_TIMEOUT_MS || 60000,
 );
-const PLANNER_MAX_TOKENS = 128;
+const PLANNER_MAX_TOKENS = 384;
+const MAX_TOOL_CALLS = 4;
 const TOOL_DEBUG = process.env.BRIGHTLENS_TOOL_DEBUG === '1';
+const SITE_URLS = {
+  chatgpt: 'https://chatgpt.com',
+  github: 'https://github.com',
+  gmail: 'https://mail.google.com',
+  google: 'https://www.google.com',
+  youtube: 'https://www.youtube.com',
+};
 
 function logPlannerDiagnostic(label, value) {
   if (!TOOL_DEBUG) {
@@ -167,21 +175,69 @@ function parseToolCallsFromMessage(message, allowedToolNames) {
     : [];
 
   if (nativeCalls.length > 0) {
-    return nativeCalls.slice(0, 1);
+    return nativeCalls.slice(0, MAX_TOOL_CALLS);
   }
 
   const jsonCalls = parseJsonContent(message?.content).filter(isAllowed);
   if (jsonCalls.length > 0) {
-    return jsonCalls.slice(0, 1);
+    return jsonCalls.slice(0, MAX_TOOL_CALLS);
   }
 
   return parseFunctionGemmaText(message?.content)
     .filter(isAllowed)
-    .slice(0, 1);
+    .slice(0, MAX_TOOL_CALLS);
 }
 
-function inferObviousToolCall(userCommand) {
-  const command = String(userCommand || '').trim();
+function normalizeNaturalCommand(userCommand) {
+  let command = String(userCommand || '').trim();
+  if (!command) {
+    return '';
+  }
+
+  command = command
+    .replace(
+      /^(?:(?:hey|hi|hello|ok|okay)\s+)?(?:slash\s+)?(?:jarvis|brightlens)\b[\s,:-]*/i,
+      '',
+    )
+    .replace(/^\/jarvis\b[\s,:-]*/i, '')
+    .trim();
+
+  const leadingWrappers = [
+    /^(?:can|could|would|will)\s+you(?:\s+please)?\s+/i,
+    /^i\s+(?:want|need)\s+you\s+to\s+/i,
+    /^(?:please|just)\s+/i,
+  ];
+
+  let previous;
+  do {
+    previous = command;
+    for (const wrapper of leadingWrappers) {
+      command = command.replace(wrapper, '').trim();
+    }
+  } while (command !== previous);
+
+  return command
+    .replace(/[.?!]+$/, '')
+    .replace(/\s+(?:please|for me|right now|now)$/i, '')
+    .trim();
+}
+
+function normalizeAppTarget(value) {
+  const app = String(value || '')
+    .trim()
+    .replace(/^(?:my|the)\s+/i, '')
+    .replace(/\s+app(?:lication)?$/i, '')
+    .trim();
+
+  if (/^google\s+chrome$/i.test(app)) {
+    return 'chrome';
+  }
+
+  return app;
+}
+
+function inferSingleObviousToolCall(userCommand) {
+  const command = normalizeNaturalCommand(userCommand);
   if (!command) {
     return null;
   }
@@ -322,7 +378,7 @@ function inferObviousToolCall(userCommand) {
     return {
       name: 'manage_window',
       arguments: {
-        app: withoutTrailingPunctuation(match[2]),
+        app: normalizeAppTarget(withoutTrailingPunctuation(match[2])),
         action: match[1].toLowerCase(),
       },
     };
@@ -335,8 +391,7 @@ function inferObviousToolCall(userCommand) {
     return {
       name: 'close_app',
       arguments: {
-        app: withoutTrailingPunctuation(match[1])
-          .replace(/\s+app(?:lication)?$/i, ''),
+        app: normalizeAppTarget(withoutTrailingPunctuation(match[1])),
       },
     };
   }
@@ -455,14 +510,23 @@ function inferObviousToolCall(userCommand) {
   }
 
   match = command.match(
-    /^open\s+(?:the\s+)?(?:app(?:lication)?\s+)?(.+)$/i,
+    /^(?:open|launch|start|go\s+to)\s+(?:the\s+)?(chatgpt|github|gmail|google|youtube)(?:\s+(?:inside|in)\s+(?:it|there|the\s+browser))?$/i,
+  );
+  if (match) {
+    return {
+      name: 'open_url',
+      arguments: { url: SITE_URLS[match[1].toLowerCase()] },
+    };
+  }
+
+  match = command.match(
+    /^(?:open|launch|start|bring\s+up)\s+(?:the\s+)?(?:app(?:lication)?\s+)?(.+)$/i,
   );
   if (match) {
     return {
       name: 'open_app',
       arguments: {
-        app: withoutTrailingPunctuation(match[1])
-          .replace(/\s+app(?:lication)?$/i, ''),
+        app: normalizeAppTarget(withoutTrailingPunctuation(match[1])),
       },
     };
   }
@@ -470,11 +534,95 @@ function inferObviousToolCall(userCommand) {
   return null;
 }
 
+function splitSequentialCommands(command) {
+  return command
+    .split(
+      /\s+(?:and\s+then|then|and)\s+(?=(?:abort|cancel|capture|change|clear|close|copy|create|delete|empty|exit|find|focus|get|google|launch|list|make|maximize|minimize|move|mute|open|quit|read|remind|remove|rename|restart|restore|run|save|search|set|show|shut|start|take|trash|turn|unmute|youtube)\b)/i,
+    )
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function inferBrowserNavigationPlan(command) {
+  const match = command.match(
+    /^(?:open|launch|start)\s+(?:the\s+)?(google\s+chrome|chrome|microsoft\s+edge|edge)\s+(?:and\s+then|then|and)\s+(?:open\s+|go\s+to\s+)?(?:the\s+)?(chatgpt|github|gmail|google|youtube)(?:\s+(?:inside|in)\s+(?:it|there|the\s+browser))?$/i,
+  );
+  if (!match) {
+    return [];
+  }
+
+  const browser = normalizeAppTarget(match[1]);
+  const site = match[2].toLowerCase();
+  return [
+    { name: 'open_app', arguments: { app: browser } },
+    {
+      name: 'open_url',
+      arguments: {
+        url: SITE_URLS[site],
+        browser,
+      },
+    },
+  ];
+}
+
+function inferObviousToolCalls(userCommand) {
+  const command = normalizeNaturalCommand(userCommand);
+  if (!command) {
+    return [];
+  }
+
+  const browserPlan = inferBrowserNavigationPlan(command);
+  if (browserPlan.length > 0) {
+    return browserPlan;
+  }
+
+  const commandParts = splitSequentialCommands(command);
+  if (commandParts.length > 1) {
+    const calls = commandParts
+      .map(inferSingleObviousToolCall)
+      .filter(Boolean);
+    return calls.length === commandParts.length
+      ? calls.slice(0, MAX_TOOL_CALLS)
+      : [];
+  }
+
+  const call = inferSingleObviousToolCall(command);
+  return call ? [call] : [];
+}
+
+function inferObviousToolCall(userCommand) {
+  const calls = inferObviousToolCalls(userCommand);
+  return calls.length === 1 ? calls[0] : null;
+}
+
+function isLikelyToolRequest(userCommand) {
+  const command = normalizeNaturalCommand(userCommand);
+  if (!command) {
+    return false;
+  }
+
+  if (inferObviousToolCalls(command).length > 0) {
+    return true;
+  }
+
+  if (
+    /^(?:explain|describe|summarize|write|draft|who|what|when|where|why|how)\b/i.test(command)
+    || /^(?:show|tell)\s+me\s+(?:how|what|when|where|why)\b/i.test(command)
+  ) {
+    return false;
+  }
+
+  return /^(?:browse|bring|cancel|change|clear|close|copy|create|delete|empty|exit|find|focus|get|google|launch|list|locate|make|maximize|minimize|move|mute|open|put|quit|read|remind|remove|rename|restart|restore|run|save|search|set|show|shut|start|take|trash|turn|unmute|youtube)\b/i.test(command);
+}
+
 function createSystemPrompt(toolNames) {
   return [
-    'You are a model that can do function calling with the following functions.',
-    `Select exactly one structured tool call using one of these exact names: ${toolNames.join(', ')}.`,
-    'Never invent a tool name, omit the tool name, or call a tool more than once.',
+    'You route Windows desktop action requests to functions.',
+    `When supported actions are requested, return an ordered plan of one to ${MAX_TOOL_CALLS} structured tool calls using only these exact names: ${toolNames.join(', ')}.`,
+    'Keep the calls in execution order and include only steps required to satisfy the request.',
+    'If the request is informational, conversational, or unsupported, do not call a tool and respond exactly NO_TOOL.',
+    'Never invent a tool name or exceed the tool-call limit.',
+    'When opening a website in a named browser, pass that browser in the open_url browser argument.',
     'Use web_search for requests to search the web.',
     'Use youtube_search for requests to search YouTube.',
     'Use run_powershell when the user explicitly asks to run PowerShell.',
@@ -487,14 +635,21 @@ function createSystemPrompt(toolNames) {
 }
 
 async function planToolCalls(userCommand) {
-  const command = String(userCommand || '').trim();
-  const fallbackToolCall = inferObviousToolCall(command);
+  const command = normalizeNaturalCommand(userCommand);
+  const fallbackToolCalls = inferObviousToolCalls(command);
+
+  if (fallbackToolCalls.length > 0) {
+    logPlannerDiagnostic('local tool plan', fallbackToolCalls);
+    return fallbackToolCalls;
+  }
+
+  if (!isLikelyToolRequest(command)) {
+    logPlannerDiagnostic('not a tool request', command);
+    return [];
+  }
+
   const allOllamaTools = getOllamaTools();
-  const ollamaTools = fallbackToolCall
-    ? allOllamaTools.filter(
-      (tool) => tool.function.name === fallbackToolCall.name,
-    )
-    : allOllamaTools;
+  const ollamaTools = allOllamaTools;
   const allowedToolNames = ollamaTools.map((tool) => tool.function.name);
   let response;
 
@@ -523,30 +678,30 @@ async function planToolCalls(userCommand) {
       signal: AbortSignal.timeout(PLANNER_TIMEOUT_MS),
     });
   } catch (error) {
-    if (fallbackToolCall && error?.name === 'TimeoutError') {
-      logPlannerDiagnostic(
-        'timeout fallback tool call',
-        fallbackToolCall,
-      );
-      return [fallbackToolCall];
-    }
-    throw error;
+    logPlannerDiagnostic(
+      'planner unavailable',
+      error instanceof Error ? error.message : String(error),
+    );
+    return [];
   }
 
   const rawResponse = await response.text();
   logPlannerDiagnostic('raw Ollama response', rawResponse);
 
   if (!response.ok) {
-    throw new Error(
-      `Ollama planner failed: ${response.status} ${rawResponse}`,
+    logPlannerDiagnostic(
+      'planner http error',
+      `${response.status} ${rawResponse}`,
     );
+    return [];
   }
 
   let data;
   try {
     data = JSON.parse(rawResponse);
   } catch (error) {
-    throw new Error(`Ollama planner returned invalid JSON: ${error.message}`);
+    logPlannerDiagnostic('invalid planner JSON', error.message);
+    return [];
   }
 
   const message = data.message || {};
@@ -555,16 +710,8 @@ async function planToolCalls(userCommand) {
 
   const toolCalls = parseToolCallsFromMessage(message, allowedToolNames);
   if (toolCalls.length === 0) {
-    logPlannerDiagnostic('fallback text content', message.content || '');
-    if (fallbackToolCall) {
-      logPlannerDiagnostic('obvious command fallback', fallbackToolCall);
-      return [fallbackToolCall];
-    }
+    logPlannerDiagnostic('no tool selected', message.content || '');
     return toolCalls;
-  }
-
-  if (fallbackToolCall && toolCalls[0].name === fallbackToolCall.name) {
-    return [fallbackToolCall];
   }
 
   return toolCalls;
@@ -572,6 +719,9 @@ async function planToolCalls(userCommand) {
 
 module.exports = {
   inferObviousToolCall,
+  inferObviousToolCalls,
+  isLikelyToolRequest,
+  normalizeNaturalCommand,
   parseToolCallsFromMessage,
   planToolCalls,
 };

@@ -146,6 +146,16 @@ function validateToolCall(toolCall) {
     };
   }
 
+  if (
+    name === 'open_app'
+    && /\s+(?:and\s+then|and|then)\s+/i.test(args.app)
+  ) {
+    return {
+      ok: false,
+      reason: 'The app name contains multiple actions. Use a multi-step plan.',
+    };
+  }
+
   if (name === 'run_powershell') {
     const command = String(args.command || '');
     for (const fragment of blockedPowerShellFragments) {

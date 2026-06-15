@@ -16,7 +16,10 @@ function mockOllamaResponse(message) {
 }
 
 test('maps explicit supported commands to registered fallback calls', () => {
-  const { inferObviousToolCall } = require('../electron/tools/planner.cjs');
+  const {
+    inferObviousToolCall,
+    inferObviousToolCalls,
+  } = require('../electron/tools/planner.cjs');
 
   assert.deepEqual(inferObviousToolCall('open notepad'), {
     name: 'open_app',
@@ -55,9 +58,52 @@ test('maps explicit supported commands to registered fallback calls', () => {
       },
     },
   );
+  assert.deepEqual(inferObviousToolCall('just open Chrome'), {
+    name: 'open_app',
+    arguments: { app: 'Chrome' },
+  });
+  assert.deepEqual(
+    inferObviousToolCall('Jarvis, could you please launch Google Chrome for me?'),
+    {
+      name: 'open_app',
+      arguments: { app: 'chrome' },
+    },
+  );
+  assert.deepEqual(inferObviousToolCall('Slash Jarvis open calculator'), {
+    name: 'open_app',
+    arguments: { app: 'calculator' },
+  });
+  assert.deepEqual(inferObviousToolCall('open YouTube'), {
+    name: 'open_url',
+    arguments: { url: 'https://www.youtube.com' },
+  });
+  assert.equal(
+    inferObviousToolCall('open chrome and youtube inside it'),
+    null,
+  );
+  assert.deepEqual(
+    inferObviousToolCalls('open chrome and youtube inside it'),
+    [
+      { name: 'open_app', arguments: { app: 'chrome' } },
+      {
+        name: 'open_url',
+        arguments: {
+          url: 'https://www.youtube.com',
+          browser: 'chrome',
+        },
+      },
+    ],
+  );
+  assert.deepEqual(
+    inferObviousToolCalls('open notepad and then open calculator'),
+    [
+      { name: 'open_app', arguments: { app: 'notepad' } },
+      { name: 'open_app', arguments: { app: 'calculator' } },
+    ],
+  );
 });
 
-test('filters unnamed native calls and parses JSON content calls', () => {
+test('filters invalid calls and preserves bounded ordered tool plans', () => {
   const {
     parseToolCallsFromMessage,
   } = require('../electron/tools/planner.cjs');
@@ -72,9 +118,21 @@ test('filters unnamed native calls and parses JSON content calls', () => {
             arguments: { app: 'notepad' },
           },
         },
+        {
+          function: {
+            name: 'open_url',
+            arguments: { url: 'https://www.youtube.com', browser: 'chrome' },
+          },
+        },
       ],
     }),
-    [{ name: 'open_app', arguments: { app: 'notepad' } }],
+    [
+      { name: 'open_app', arguments: { app: 'notepad' } },
+      {
+        name: 'open_url',
+        arguments: { url: 'https://www.youtube.com', browser: 'chrome' },
+      },
+    ],
   );
 
   assert.deepEqual(
@@ -91,35 +149,59 @@ test('filters unnamed native calls and parses JSON content calls', () => {
   );
 });
 
-test('uses the explicit fallback when Ollama returns no usable call', async () => {
+test('returns no tool when FunctionGemma returns no usable call', async () => {
   const { planToolCalls } = require('../electron/tools/planner.cjs');
   global.fetch = async () => mockOllamaResponse({
     role: 'assistant',
     content: '',
   });
 
-  assert.deepEqual(await planToolCalls('open notepad'), [{
-    name: 'open_app',
-    arguments: { app: 'notepad' },
-  }]);
+  assert.deepEqual(await planToolCalls('put Chrome on screen'), []);
 });
 
-test('uses the explicit fallback when Ollama times out', async () => {
+test('runs obvious local commands without contacting Ollama', async () => {
   const { planToolCalls } = require('../electron/tools/planner.cjs');
+  let fetchCalls = 0;
   global.fetch = async () => {
-    throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    fetchCalls += 1;
+    throw new TypeError('fetch failed');
   };
 
   assert.deepEqual(
-    await planToolCalls('search the web for Ollama FunctionGemma'),
+    await planToolCalls('just open Chrome'),
     [{
-      name: 'web_search',
-      arguments: { query: 'Ollama FunctionGemma' },
+      name: 'open_app',
+      arguments: { app: 'Chrome' },
     }],
   );
+  assert.equal(fetchCalls, 0);
 });
 
-test('narrows explicit commands to one tool and bounds model output', async () => {
+test('runs obvious multi-step commands without contacting Ollama', async () => {
+  const { planToolCalls } = require('../electron/tools/planner.cjs');
+  let fetchCalls = 0;
+  global.fetch = async () => {
+    fetchCalls += 1;
+    throw new TypeError('fetch failed');
+  };
+
+  assert.deepEqual(
+    await planToolCalls('open chrome and youtube inside it'),
+    [
+      { name: 'open_app', arguments: { app: 'chrome' } },
+      {
+        name: 'open_url',
+        arguments: {
+          url: 'https://www.youtube.com',
+          browser: 'chrome',
+        },
+      },
+    ],
+  );
+  assert.equal(fetchCalls, 0);
+});
+
+test('uses FunctionGemma for ambiguous action phrasing and bounds model output', async () => {
   const { planToolCalls } = require('../electron/tools/planner.cjs');
   let requestBody;
   global.fetch = async (_url, options) => {
@@ -128,19 +210,46 @@ test('narrows explicit commands to one tool and bounds model output', async () =
       role: 'assistant',
       tool_calls: [{
         function: {
-          name: 'web_search',
-          arguments: { query: 'Ollama FunctionGemma' },
+          name: 'open_app',
+          arguments: { app: 'chrome' },
         },
       }],
     });
   };
 
-  await planToolCalls('search the web for Ollama FunctionGemma');
+  assert.deepEqual(await planToolCalls('put Chrome on screen'), [{
+    name: 'open_app',
+    arguments: { app: 'chrome' },
+  }]);
 
-  assert.equal(requestBody.tools.length, 1);
-  assert.equal(requestBody.tools[0].function.name, 'web_search');
-  assert.equal(requestBody.options.num_predict, 128);
+  assert.ok(requestBody.tools.length > 1);
+  assert.equal(requestBody.options.num_predict, 384);
   assert.equal(requestBody.options.seed, 0);
+  assert.match(requestBody.messages[0].content, /ordered plan/i);
+});
+
+test('does not invoke the tool model for ordinary conversation', async () => {
+  const { planToolCalls } = require('../electron/tools/planner.cjs');
+  let fetchCalls = 0;
+  global.fetch = async () => {
+    fetchCalls += 1;
+    return mockOllamaResponse({ role: 'assistant', content: 'NO_TOOL' });
+  };
+
+  assert.deepEqual(
+    await planToolCalls('Explain how browser tabs work'),
+    [],
+  );
+  assert.equal(fetchCalls, 0);
+});
+
+test('returns no tool instead of surfacing planner connection failures', async () => {
+  const { planToolCalls } = require('../electron/tools/planner.cjs');
+  global.fetch = async () => {
+    throw new TypeError('fetch failed');
+  };
+
+  assert.deepEqual(await planToolCalls('put Chrome on screen'), []);
 });
 
 test('keeps PowerShell fallback behind validation and confirmation', () => {
