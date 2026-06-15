@@ -32,8 +32,12 @@ interface CommandPaletteProps {
 }
 
 /** Spotlight-style command launcher with keyboard navigation (Cmd/Ctrl+K). */
-export function CommandPalette({
-  open,
+export function CommandPalette(props: CommandPaletteProps) {
+  if (!props.open) return null
+  return <CommandPaletteInner {...props} />
+}
+
+function CommandPaletteInner({
   onClose,
   conversations,
   onNewChat,
@@ -45,7 +49,7 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
-  const ref = useFocusTrap<HTMLDivElement>(open, onClose)
+  const ref = useFocusTrap<HTMLDivElement>(true, onClose)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const run = (fn: () => void) => {
@@ -80,30 +84,25 @@ export function CommandPalette({
     )
   }, [actions, query])
 
-  useEffect(() => {
-    if (open) {
-      setQuery('')
-      setHighlight(0)
-      requestAnimationFrame(() => inputRef.current?.focus())
-    }
-  }, [open])
+  // Keep the highlighted index valid as the filtered list shrinks, without
+  // resetting state in an effect (which the compiler flags).
+  const activeIndex = filtered.length === 0 ? -1 : Math.min(highlight, filtered.length - 1)
 
   useEffect(() => {
-    setHighlight(0)
-  }, [query])
-
-  if (!open) return null
+    const raf = requestAnimationFrame(() => inputRef.current?.focus())
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setHighlight((h) => Math.min(filtered.length - 1, h + 1))
+      setHighlight(Math.min(filtered.length - 1, activeIndex + 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setHighlight((h) => Math.max(0, h - 1))
+      setHighlight(Math.max(0, activeIndex - 1))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      filtered[highlight]?.run()
+      filtered[activeIndex]?.run()
     }
   }
 
@@ -126,7 +125,10 @@ export function CommandPalette({
             className="palette__input"
             placeholder="Search commands and conversations…"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setHighlight(0)
+            }}
             aria-label="Search commands"
           />
           <kbd className="palette__kbd">Esc</kbd>
@@ -138,10 +140,10 @@ export function CommandPalette({
             {filtered.map((command, index) => {
               const Icon = command.icon
               return (
-                <li key={command.id} role="option" aria-selected={index === highlight}>
+                <li key={command.id} role="option" aria-selected={index === activeIndex}>
                   <button
                     type="button"
-                    className={`palette__item ${index === highlight ? 'is-highlight' : ''}`}
+                    className={`palette__item ${index === activeIndex ? 'is-highlight' : ''}`}
                     onMouseEnter={() => setHighlight(index)}
                     onClick={command.run}
                   >

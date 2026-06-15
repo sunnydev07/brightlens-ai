@@ -49,7 +49,9 @@ export default function App() {
 
   const [input, setInput] = useState('')
   const inputRef = useRef('')
-  inputRef.current = input
+  useEffect(() => {
+    inputRef.current = input
+  }, [input])
 
   const [pendingImage, setPendingImage] = useState<string | null>(null)
   const [capturing, setCapturing] = useState(false)
@@ -67,15 +69,14 @@ export default function App() {
   }, [])
 
   const visionMode = preferences.visionMode
-  const activeSystemPrompt =
-    modes.find((m) => m.name === activeMode)?.systemPrompt ?? null
 
-  // Keep the active mode valid if it gets deleted elsewhere.
-  useEffect(() => {
-    if (!modes.some((m) => m.name === activeMode)) {
-      setActiveMode(modes[0]?.name ?? 'Default')
-    }
-  }, [modes, activeMode])
+  // Derive a guaranteed-valid active mode during render so a deleted mode
+  // gracefully falls back without correcting state inside an effect.
+  const effectiveMode = modes.some((m) => m.name === activeMode)
+    ? activeMode
+    : modes[0]?.name ?? 'Default'
+  const activeSystemPrompt =
+    modes.find((m) => m.name === effectiveMode)?.systemPrompt ?? null
 
   const { appendMessage, updateMessage } = conversations
 
@@ -177,7 +178,7 @@ export default function App() {
 
   // ── Composer submit ────────────────────────────────────────────────────────
   const submitMessage = useCallback(async () => {
-    if (chat.busyRef.current) return
+  if (chat.isBusy()) return
     const text = inputRef.current.trim()
     const image = pendingImage
     if (!text && !image) return
@@ -250,7 +251,7 @@ export default function App() {
   useEffect(() => {
     if (!bridge.isElectron) return
     return bridge.subscribeScreenCapture(async (_event, source) => {
-      if (chat.busyRef.current) {
+      if (chat.isBusy()) {
         showToast('info', 'Finish or stop the current request first.')
         bridge.captureDone()
         return
@@ -268,7 +269,7 @@ export default function App() {
         bridge.captureDone()
       }
     })
-  }, [bridge, chat.busyRef, streamPrompt, showToast])
+  }, [bridge, chat, streamPrompt, showToast])
 
   const captureScreen = useCallback(() => {
     if (!bridge.canCaptureScreen) {
@@ -383,7 +384,7 @@ export default function App() {
 
       <AppHeader
         modes={modes}
-        activeMode={activeMode}
+        activeMode={effectiveMode}
         onSelectMode={setActiveMode}
         onCreateMode={() => setCreateModeOpen(true)}
         visionMode={visionMode}

@@ -34,13 +34,17 @@ export function ModePicker({
 
   useEffect(() => {
     if (!open) return
-    setHighlight(activeIndex)
     const onClick = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
-  }, [open, activeIndex])
+  }, [open])
+
+  const openMenu = () => {
+    setHighlight(activeIndex)
+    setOpen(true)
+  }
 
   const choose = (name: string) => {
     onSelect(name)
@@ -51,7 +55,7 @@ export function ModePicker({
     if (!open) {
       if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
         e.preventDefault()
-        setOpen(true)
+        openMenu()
       }
       return
     }
@@ -76,7 +80,7 @@ export function ModePicker({
       <button
         type="button"
         className="mode-picker__trigger"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? setOpen(false) : openMenu())}
         onKeyDown={onKeyDown}
         disabled={disabled}
         aria-haspopup="listbox"

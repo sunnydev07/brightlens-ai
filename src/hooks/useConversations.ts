@@ -48,7 +48,9 @@ export function useConversations(retentionDays: number): ConversationsController
   const [store, setStore] = useState<ConversationStore>(() => loadStore(retentionDays))
   const [activeId, setActiveIdState] = useState<string | null>(null)
   const storeRef = useRef(store)
-  storeRef.current = store
+  useEffect(() => {
+    storeRef.current = store
+  }, [store])
 
   // Mirror the active id in a ref so several appends fired in the same tick
   // (e.g. user + assistant turns) all target the same conversation before

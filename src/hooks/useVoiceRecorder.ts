@@ -26,7 +26,9 @@ export interface VoiceRecorder {
  */
 export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorder {
   const optsRef = useRef(options)
-  optsRef.current = options
+  useEffect(() => {
+    optsRef.current = options
+  }, [options])
 
   const [isRecording, setIsRecording] = useState(false)
   const [recordingMode, setRecordingMode] = useState<RecordingMode | null>(null)

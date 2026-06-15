@@ -72,7 +72,7 @@ export function MessageCard({ message, streaming = false }: MessageCardProps) {
           </div>
         ) : message.content ? (
           <div className="msg__content">
-            <Markdown text={message.content} />
+            <Markdown>{message.content}</Markdown>
             {streaming && <span className="msg__caret" aria-hidden="true" />}
           </div>
         ) : streaming ? (

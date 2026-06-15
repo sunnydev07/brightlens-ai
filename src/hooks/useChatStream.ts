@@ -17,7 +17,8 @@ export interface LockedOutcome<T> {
 export interface ChatStream {
   /** True while a streamed or locked assistant task is running. */
   busy: boolean
-  busyRef: React.RefObject<boolean>
+  /** Stable accessor for the live busy flag, safe to call inside callbacks. */
+  isBusy: () => boolean
   /** Stream a model response, dispatching tokens to `onToken`. */
   stream: (payload: AnalyzePayload, onToken: (token: string) => void) => Promise<StreamOutcome>
   /** Run a non-streamed async task (e.g. Mini-Jarvis) under the busy lock. */
@@ -98,5 +99,7 @@ export function useChatStream(): ChatStream {
     release()
   }, [release])
 
-  return { busy, busyRef, stream, runLocked, stop }
+  const isBusy = useCallback(() => busyRef.current, [])
+
+  return { busy, isBusy, stream, runLocked, stop }
 }

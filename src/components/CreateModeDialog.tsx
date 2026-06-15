@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Overlay } from './ui/Overlay'
 import { modeNameExists } from '../lib/modes'
 import type { BrightlensMode } from '../lib/types'
@@ -12,17 +12,30 @@ interface CreateModeDialogProps {
 
 /** Dialog to create a custom assistant persona with an optional system prompt. */
 export function CreateModeDialog({ open, onClose, existing, onCreate }: CreateModeDialogProps) {
+  return (
+    <Overlay
+      open={open}
+      onClose={onClose}
+      variant="center"
+      title="New mode"
+      description="Give your assistant a persona and an optional system prompt."
+      labelledBy="create-mode-title"
+      className="overlay__panel--narrow"
+    >
+      {/* Mount the form only while open so its fields reset on each open. */}
+      {open && <CreateModeForm onClose={onClose} existing={existing} onCreate={onCreate} />}
+    </Overlay>
+  )
+}
+
+function CreateModeForm({
+  onClose,
+  existing,
+  onCreate,
+}: Omit<CreateModeDialogProps, 'open'>) {
   const [name, setName] = useState('')
   const [systemPrompt, setSystemPrompt] = useState('')
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (open) {
-      setName('')
-      setSystemPrompt('')
-      setError(null)
-    }
-  }, [open])
 
   const submit = () => {
     const trimmed = name.trim()
@@ -39,22 +52,13 @@ export function CreateModeDialog({ open, onClose, existing, onCreate }: CreateMo
   }
 
   return (
-    <Overlay
-      open={open}
-      onClose={onClose}
-      variant="center"
-      title="New mode"
-      description="Give your assistant a persona and an optional system prompt."
-      labelledBy="create-mode-title"
-      className="overlay__panel--narrow"
+    <form
+      className="mode-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        submit()
+      }}
     >
-      <form
-        className="mode-form"
-        onSubmit={(e) => {
-          e.preventDefault()
-          submit()
-        }}
-      >
         <label className="field">
           <span className="field__label">Name</span>
           <input
@@ -97,7 +101,6 @@ export function CreateModeDialog({ open, onClose, existing, onCreate }: CreateMo
             Create mode
           </button>
         </div>
-      </form>
-    </Overlay>
+    </form>
   )
 }
