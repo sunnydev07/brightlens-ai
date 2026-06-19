@@ -35,3 +35,7 @@ __pycache__/
 # Misc
 .claude/
 .worktrees/
+
+# Build artifacts
+tsconfig.tsbuildinfo
+*.tsbuildinfo

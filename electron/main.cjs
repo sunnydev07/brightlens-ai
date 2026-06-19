@@ -36,7 +36,11 @@ function createWindow() {
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#00000000',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs')
+      preload: path.join(__dirname, 'preload.cjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true
     }
   });
 
@@ -53,6 +57,43 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
+
+  // ── Security: Content Security Policy ──────────────────────────────────────
+  const { session } = require('electron');
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self' http://localhost:5173 http://localhost:5000; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:5173; " +
+          "style-src 'self' 'unsafe-inline' http://localhost:5173; " +
+          "img-src 'self' data: blob: http://localhost:5173; " +
+          "connect-src 'self' http://localhost:5000 http://localhost:5173 ws://localhost:5173; " +
+          "font-src 'self' data: http://localhost:5173"
+        ]
+      }
+    });
+  });
+
+  // ── Security: Prevent navigation to arbitrary URLs ─────────────────────────
+  app.on('web-contents-created', (event, contents) => {
+    contents.on('will-navigate', (event, url) => {
+      const allowedOrigins = ['http://localhost:5173', 'http://localhost:5000'];
+      const allowed = allowedOrigins.some(origin => url.startsWith(origin));
+      if (!allowed) {
+        console.warn('Blocked navigation to:', url);
+        event.preventDefault();
+      }
+    });
+
+    // Block new window creation
+    contents.setWindowOpenHandler(({ url }) => {
+      console.warn('Blocked new window:', url);
+      return { action: 'deny' };
+    });
+  });
+
 
   // Robustly resolve icon path using __dirname, which works for both dev and in app.asar for prod
   const iconPath = path.join(__dirname, '../assets/tray-icon.png');

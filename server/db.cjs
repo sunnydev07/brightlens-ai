@@ -37,17 +37,18 @@ function save(question, answer) {
   );
 }
 
-function getSessionHistory() {
+function getSessionHistory(limit = 20) {
   return new Promise((resolve) => {
     db.all(
-      "SELECT question, answer FROM history WHERE sessionId = ? ORDER BY id ASC",
-      [currentSessionId],
+      "SELECT question, answer FROM history WHERE sessionId = ? ORDER BY id DESC LIMIT ?",
+      [currentSessionId, limit],
       (err, rows) => {
         if (err) {
           console.error("DB read error:", err);
           resolve([]);
         } else {
-          resolve(rows || []);
+          // Reverse to get chronological order (oldest first)
+          resolve((rows || []).reverse());
         }
       }
     );

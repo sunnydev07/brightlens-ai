@@ -17,21 +17,21 @@ const NVIDIA_API_KEY      = process.env.NVIDIA_API_KEY;
 const NVIDIA_API_BASE     = "https://integrate.api.nvidia.com/v1";
 
 // ── Non-streaming (kept for /analyze) ────────────────────────────────────────
-async function analyze(image, prompt, mode = "online", systemPrompt = null) {
+async function analyze(image, prompt, mode = "online", systemPrompt = null, keys = {}) {
   if (image) {
     return mode === "offline"
       ? await callOllamaVisionModel(image, prompt, systemPrompt)
-      : await callGeminiModel(image, prompt, systemPrompt);
+      : await callGeminiModel(image, prompt, systemPrompt, keys);
   }
   // Text-only: online → OpenRouter, offline → local Ollama
   if (mode === "online") {
-    return await callOpenRouterModel(prompt, systemPrompt);
+    return await callOpenRouterModel(prompt, systemPrompt, keys);
   }
   return await callOllamaModel(prompt, systemPrompt);
 }
 
 // ── Streaming entry point (/analyze-stream) ───────────────────────────────────
-async function analyzeStream(image, prompt, mode = "online", systemPrompt = null, onlineVisionModel = "gemini", expressRes) {
+async function analyzeStream(image, prompt, mode = "online", systemPrompt = null, onlineVisionModel = "gemini", expressRes, keys = {}) {
   // SSE headers
   expressRes.setHeader("Content-Type", "text/event-stream");
   expressRes.setHeader("Cache-Control", "no-cache");
@@ -45,10 +45,10 @@ async function analyzeStream(image, prompt, mode = "online", systemPrompt = null
         return await streamOllamaVision(image, prompt, systemPrompt, expressRes);
       } else {
         if (onlineVisionModel === "nvidia") {
-          return await streamNvidiaVision(image, prompt, systemPrompt, expressRes);
+          return await streamNvidiaVision(image, prompt, systemPrompt, expressRes, keys);
         } else {
           // Gemini: get full response then emit as one event
-          const text = await callGeminiModel(image, prompt, systemPrompt);
+          const text = await callGeminiModel(image, prompt, systemPrompt, keys);
           sendSSE(expressRes, { token: text, done: true });
           expressRes.end();
           return text;
@@ -57,7 +57,7 @@ async function analyzeStream(image, prompt, mode = "online", systemPrompt = null
     } else {
       // Text-only: online → OpenRouter streaming, offline → local Ollama streaming
       if (mode === "online") {
-        return await streamOpenRouterText(prompt, systemPrompt, expressRes);
+        return await streamOpenRouterText(prompt, systemPrompt, expressRes, keys);
       }
       return await streamOllamaText(prompt, systemPrompt, expressRes);
     }
@@ -72,8 +72,9 @@ async function analyzeStream(image, prompt, mode = "online", systemPrompt = null
 
 
 // ── Streaming: OpenRouter text (online) ───────────────────────────────────────
-async function streamOpenRouterText(prompt, systemPrompt, expressRes) {
-  if (!OPENROUTER_API_KEY) throw createError("OPENROUTER_API_KEY is missing in .env.", 500);
+async function streamOpenRouterText(prompt, systemPrompt, expressRes, keys = {}) {
+  const apiKey = keys?.openrouterKey || OPENROUTER_API_KEY;
+  if (!apiKey) throw createError("OPENROUTER_API_KEY is missing in settings or .env.", 500);
 
   const controller = new AbortController();
   expressRes.on("close", () => controller.abort());
@@ -103,7 +104,7 @@ If the user explicitly asks to "elaborate", "explain in detail", "step-by-step",
       },
       {
         headers: {
-          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
           "HTTP-Referer": "http://localhost:5000",
           "X-Title": "Brightlens AI"
@@ -171,8 +172,9 @@ function pipeOpenRouterStream(stream, expressRes) {
 }
 
 // ── Streaming: NVIDIA vision (online) ─────────────────────────────────────────
-async function streamNvidiaVision(image, prompt, systemPrompt, expressRes) {
-  if (!NVIDIA_API_KEY) throw createError("NVIDIA_API_KEY is missing in .env.", 500);
+async function streamNvidiaVision(image, prompt, systemPrompt, expressRes, keys = {}) {
+  const apiKey = keys?.nvidiaKey || NVIDIA_API_KEY;
+  if (!apiKey) throw createError("NVIDIA_API_KEY is missing in settings or .env.", 500);
 
   const controller = new AbortController();
   expressRes.on("close", () => controller.abort());
@@ -203,7 +205,7 @@ async function streamNvidiaVision(image, prompt, systemPrompt, expressRes) {
       },
       {
         headers: {
-          "Authorization": `Bearer ${NVIDIA_API_KEY}`,
+          "Authorization": `Bearer ${apiKey}`,
           "Accept": "text/event-stream",
           "Content-Type": "application/json"
         },
@@ -322,9 +324,9 @@ function pipeOllamaStream(stream, expressRes) {
 }
 
 // ── Non-streaming model calls (for /analyze) ──────────────────────────────────
-async function callGeminiModel(image, prompt, systemPrompt) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw createError("GEMINI_API_KEY is missing in .env.", 500);
+async function callGeminiModel(image, prompt, systemPrompt, keys = {}) {
+  const apiKey = keys?.geminiKey || process.env.GEMINI_API_KEY;
+  if (!apiKey) throw createError("GEMINI_API_KEY is missing in settings or .env.", 500);
 
   const { mimeType, base64Data } = parseImageData(image);
   const parts = [
@@ -334,12 +336,17 @@ async function callGeminiModel(image, prompt, systemPrompt) {
 
   try {
     const res = await axios.post(
-      `${GEMINI_API_BASE}/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+      `${GEMINI_API_BASE}/models/${GEMINI_MODEL}:generateContent`,
       {
         contents: [{ role: "user", parts }],
         generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
       },
-      { headers: { "Content-Type": "application/json" } }
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey
+        }
+      }
     );
 
     const text = res.data?.candidates?.[0]?.content?.parts
@@ -394,8 +401,9 @@ async function callOllamaModel(prompt, systemPrompt) {
 }
 
 // ── Non-streaming: OpenRouter (online text) ───────────────────────────────────
-async function callOpenRouterModel(prompt, systemPrompt) {
-  if (!OPENROUTER_API_KEY) throw createError("OPENROUTER_API_KEY is missing in .env.", 500);
+async function callOpenRouterModel(prompt, systemPrompt, keys = {}) {
+  const apiKey = keys?.openrouterKey || OPENROUTER_API_KEY;
+  if (!apiKey) throw createError("OPENROUTER_API_KEY is missing in settings or .env.", 500);
 
   const sys = systemPrompt || `You are an expert tutor helping a student.
 
@@ -419,7 +427,7 @@ If the user explicitly asks to "elaborate", "explain in detail", "step-by-step",
       },
       {
         headers: {
-          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
           "HTTP-Referer": "http://localhost:5000",
           "X-Title": "Brightlens AI"
