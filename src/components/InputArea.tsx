@@ -17,9 +17,9 @@ export interface InputAreaProps {
   handleAskText: () => void;
   stopGeneration: (e?: React.MouseEvent) => void;
   setShowSettings: (val: boolean) => void;
-  response: string;
-  submittedQuestion: string;
-  setImage: (val: string | null) => void;
+  hasMessages: boolean;
+  handleClearChat: () => void;
+  toggleHistoryDrawer: () => void;
   setError: (val: string) => void;
 }
 
@@ -39,9 +39,9 @@ export function InputArea({
   handleAskText,
   stopGeneration,
   setShowSettings,
-  response,
-  submittedQuestion,
-  setImage,
+  hasMessages,
+  handleClearChat,
+  toggleHistoryDrawer,
   setError
 }: InputAreaProps) {
   return (
@@ -187,8 +187,8 @@ export function InputArea({
             📎<input type="file" accept="audio/*" onChange={handleAudioUpload} aria-label="Audio file selector" style={{ display: "none" }} />
           </label>
 
-          {(questionText || response || submittedQuestion) && (
-            <button onClick={() => { setQuestionText(""); setImage(null); setError(""); }}
+          {(questionText || hasMessages) && (
+            <button onClick={handleClearChat}
               title="Clear all" 
               aria-label="Clear current question, image preview, and response"
               style={{
@@ -200,6 +200,19 @@ export function InputArea({
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.button}
             >✕</button>
           )}
+
+          <button 
+            onClick={(e) => { e.preventDefault(); toggleHistoryDrawer(); }}
+            title="Chat History" 
+            aria-label="Open chat history sidebar"
+            style={{
+              width: "28px", height: "28px", borderRadius: "8px", border: "none",
+              cursor: "pointer", backgroundColor: theme.button, color: theme.textSubtle, fontSize: "14px",
+              transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.buttonHover}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.button}
+          >📜</button>
 
           <button 
             onClick={(e) => { e.preventDefault(); setShowSettings(true); }}

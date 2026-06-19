@@ -21,5 +21,8 @@ interface Window {
     closeApp?: () => void;
     minimizeApp?: () => void;
     maximizeApp?: () => void;
+    getBackendPort?: () => Promise<number>;
+    getSecureKeys?: () => Promise<{ gemini?: string; openrouter?: string; nvidia?: string }>;
+    saveSecureKeys?: (keys: { gemini?: string; openrouter?: string; nvidia?: string }) => Promise<{ success: boolean; error?: string }>;
   };
 }

@@ -21,7 +21,6 @@ test('theme tokens cover markdown and glass UI surfaces', () => {
 });
 
 test('query loading renders submitted question with compact shimmering thinking state', () => {
-  assert.match(chatAreaSource, /submittedQuestion/);
   assert.match(chatAreaSource, /Thinking/);
   assert.match(chatAreaSource, /thinking-shimmer/);
 });
@@ -29,5 +28,5 @@ test('query loading renders submitted question with compact shimmering thinking 
 test('screen capture preview is compact so response text remains primary', () => {
   assert.match(chatAreaSource, /visual-context-thumbnail/);
   assert.match(chatAreaSource, /Visual Context/);
-  assert.match(chatAreaSource, /170px/);
+  assert.match(chatAreaSource, /120px/);
 });

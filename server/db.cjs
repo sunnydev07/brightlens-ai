@@ -4,7 +4,7 @@ const path = require("path");
 const dbPath = path.join(__dirname, "memory.db");
 const db = new sqlite3.Database(dbPath);
 
-const currentSessionId = Date.now().toString() + Math.random().toString(36).substring(7);
+let activeSessionId = Date.now().toString() + Math.random().toString(36).substring(7);
 
 db.serialize(() => {
   db.run(`
@@ -24,11 +24,26 @@ db.serialize(() => {
   });
 });
 
+function setActiveSession(sessionId) {
+  if (sessionId) {
+    activeSessionId = sessionId;
+  }
+}
+
+function getActiveSession() {
+  return activeSessionId;
+}
+
+function startNewSession() {
+  activeSessionId = Date.now().toString() + Math.random().toString(36).substring(7);
+  return activeSessionId;
+}
+
 function save(question, answer) {
   if (!question || !answer) return;
   db.run(
     "INSERT INTO history (sessionId, question, answer) VALUES (?, ?, ?)",
-    [currentSessionId, question, answer],
+    [activeSessionId, question, answer],
     (error) => {
       if (error) {
         console.error("DB save error:", error);
@@ -41,7 +56,7 @@ function getSessionHistory(limit = 20) {
   return new Promise((resolve) => {
     db.all(
       "SELECT question, answer FROM history WHERE sessionId = ? ORDER BY id DESC LIMIT ?",
-      [currentSessionId, limit],
+      [activeSessionId, limit],
       (err, rows) => {
         if (err) {
           console.error("DB read error:", err);
@@ -55,4 +70,46 @@ function getSessionHistory(limit = 20) {
   });
 }
 
-module.exports = { save, getSessionHistory };
+function listSessions() {
+  return new Promise((resolve) => {
+    db.all(
+      "SELECT sessionId, MIN(id) as firstId, question, timestamp FROM history GROUP BY sessionId ORDER BY firstId DESC",
+      [],
+      (err, rows) => {
+        if (err) {
+          console.error("DB list sessions error:", err);
+          resolve([]);
+        } else {
+          resolve(rows || []);
+        }
+      }
+    );
+  });
+}
+
+function deleteSession(sessionId) {
+  return new Promise((resolve) => {
+    db.run(
+      "DELETE FROM history WHERE sessionId = ?",
+      [sessionId],
+      (err) => {
+        if (err) {
+          console.error("DB delete session error:", err);
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      }
+    );
+  });
+}
+
+module.exports = {
+  save,
+  getSessionHistory,
+  setActiveSession,
+  getActiveSession,
+  startNewSession,
+  listSessions,
+  deleteSession
+};

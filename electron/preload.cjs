@@ -7,5 +7,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   requestScreenCapture: () => ipcRenderer.send('REQUEST_SCREEN_CAPTURE'),
   closeApp: () => ipcRenderer.send('close-app'),
   minimizeApp: () => ipcRenderer.send('minimize-app'),
-  maximizeApp: () => ipcRenderer.send('maximize-app')
+  maximizeApp: () => ipcRenderer.send('maximize-app'),
+  getBackendPort: () => ipcRenderer.invoke('GET_BACKEND_PORT'),
+  getSecureKeys: () => ipcRenderer.invoke('GET_SECURE_KEYS'),
+  saveSecureKeys: (keys) => ipcRenderer.invoke('SAVE_SECURE_KEYS', keys)
 });

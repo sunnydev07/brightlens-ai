@@ -31,7 +31,7 @@ async function analyze(image, prompt, mode = "online", systemPrompt = null, keys
 }
 
 // ── Streaming entry point (/analyze-stream) ───────────────────────────────────
-async function analyzeStream(image, prompt, mode = "online", systemPrompt = null, onlineVisionModel = "gemini", expressRes, keys = {}) {
+async function analyzeStream(image, prompt, mode = "online", systemPrompt = null, onlineVisionModel = "gemini", expressRes, keys = {}, options = {}) {
   // SSE headers
   expressRes.setHeader("Content-Type", "text/event-stream");
   expressRes.setHeader("Cache-Control", "no-cache");
@@ -42,7 +42,7 @@ async function analyzeStream(image, prompt, mode = "online", systemPrompt = null
   try {
     if (image) {
       if (mode === "offline") {
-        return await streamOllamaVision(image, prompt, systemPrompt, expressRes);
+        return await streamOllamaVision(image, prompt, systemPrompt, expressRes, options.offlineVisionModel);
       } else {
         if (onlineVisionModel === "nvidia") {
           return await streamNvidiaVision(image, prompt, systemPrompt, expressRes, keys);
@@ -59,7 +59,7 @@ async function analyzeStream(image, prompt, mode = "online", systemPrompt = null
       if (mode === "online") {
         return await streamOpenRouterText(prompt, systemPrompt, expressRes, keys);
       }
-      return await streamOllamaText(prompt, systemPrompt, expressRes);
+      return await streamOllamaText(prompt, systemPrompt, expressRes, options.offlineTextModel);
     }
   } catch (err) {
     if (!expressRes.writableEnded) {
@@ -223,7 +223,7 @@ async function streamNvidiaVision(image, prompt, systemPrompt, expressRes, keys 
 }
 
 // ── Streaming: Ollama text (llama3.2) ─────────────────────────────────────────
-async function streamOllamaText(prompt, systemPrompt, expressRes) {
+async function streamOllamaText(prompt, systemPrompt, expressRes, modelOverride = null) {
   let axiosRes;
   const controller = new AbortController();
   
@@ -231,11 +231,13 @@ async function streamOllamaText(prompt, systemPrompt, expressRes) {
     controller.abort();
   });
 
+  const model = modelOverride || OLLAMA_MODEL;
+
   try {
     axiosRes = await axios.post(
       `${OLLAMA_BASE}/api/generate`,
       {
-        model: OLLAMA_MODEL,
+        model,
         prompt: buildPrompt(prompt, systemPrompt),
         stream: true,
         options: { temperature: 0.2, num_predict: 4096 }  // ← increased
@@ -244,13 +246,13 @@ async function streamOllamaText(prompt, systemPrompt, expressRes) {
     );
   } catch (err) {
     if (axios.isCancel(err)) return; // Ignore aborts
-    throw normalizeOllamaError(err, OLLAMA_MODEL);
+    throw normalizeOllamaError(err, model);
   }
   return pipeOllamaStream(axiosRes.data, expressRes);
 }
 
 // ── Streaming: Ollama vision (llava) ──────────────────────────────────────────
-async function streamOllamaVision(image, prompt, systemPrompt, expressRes) {
+async function streamOllamaVision(image, prompt, systemPrompt, expressRes, modelOverride = null) {
   const base64Data = extractBase64(image);
   let axiosRes;
   const controller = new AbortController();
@@ -259,11 +261,13 @@ async function streamOllamaVision(image, prompt, systemPrompt, expressRes) {
     controller.abort();
   });
 
+  const model = modelOverride || OLLAMA_VISION_MODEL;
+
   try {
     axiosRes = await axios.post(
       `${OLLAMA_BASE}/api/generate`,
       {
-        model: OLLAMA_VISION_MODEL,
+        model,
         prompt: buildPrompt(prompt, systemPrompt),
         images: [base64Data],
         stream: true,
@@ -273,7 +277,7 @@ async function streamOllamaVision(image, prompt, systemPrompt, expressRes) {
     );
   } catch (err) {
     if (axios.isCancel(err)) return; // Ignore aborts
-    throw normalizeOllamaError(err, OLLAMA_VISION_MODEL);
+    throw normalizeOllamaError(err, model);
   }
   return pipeOllamaStream(axiosRes.data, expressRes);
 }

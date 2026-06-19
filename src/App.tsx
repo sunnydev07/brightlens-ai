@@ -11,12 +11,15 @@ import { InputArea } from "./components/InputArea";
 import { SettingsModal } from "./components/SettingsModal";
 import { CreateModeModal } from "./components/CreateModeModal";
 
-// Configurable API base URL
-const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5000").replace(/\/$/, "");
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
 
 // ── Streaming helper (module-level, no React deps) ────────────────────────────
 async function streamAnalyze(
-  payload: { image?: string | null; prompt: string; mode: string; systemPrompt?: string | null; onlineVisionModel?: string },
+  apiBase: string,
+  payload: { image?: string | null; prompt: string; mode: string; systemPrompt?: string | null; onlineVisionModel?: string; offlineTextModel?: string; offlineVisionModel?: string },
   onToken: (t: string) => void,
   signal?: AbortSignal,
   keys?: { geminiKey?: string; openrouterKey?: string; nvidiaKey?: string }
@@ -26,7 +29,7 @@ async function streamAnalyze(
   if (keys?.openrouterKey) customHeaders["x-openrouter-key"] = keys.openrouterKey;
   if (keys?.nvidiaKey) customHeaders["x-nvidia-key"] = keys.nvidiaKey;
 
-  const res = await fetch(`${API_BASE}/analyze-stream`, {
+  const res = await fetch(`${apiBase}/analyze-stream`, {
     method: "POST",
     headers: customHeaders,
     body: JSON.stringify(payload),
@@ -65,7 +68,6 @@ async function streamAnalyze(
         if (data.error) throw new Error(data.error);
         if (data.token) onToken(data.token);
       } catch (e: unknown) {
-        // Re-throw only real errors, swallow JSON parse errors
         if (e instanceof Error && !e.message.startsWith("{")) throw e;
       }
     }
@@ -79,8 +81,7 @@ function App() {
   const questionTextRef = useRef("");
 
   const [image, setImage] = useState<string | null>(null);
-  const [response, setResponse] = useState("");
-  const [submittedQuestion, setSubmittedQuestion] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [speechLoading, setSpeechLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -103,20 +104,35 @@ function App() {
   const [onlineVisionModel, setOnlineVisionModel] = useState<"gemini" | "nvidia">(() => {
     return (localStorage.getItem("brightlens_online_vision") as "gemini" | "nvidia") || "gemini";
   });
+  const [offlineTextModel, setOfflineTextModel] = useState(() => {
+    return localStorage.getItem("brightlens_offline_text") || "llama3.2:latest";
+  });
+  const [offlineVisionModel, setOfflineVisionModel] = useState(() => {
+    return localStorage.getItem("brightlens_offline_vision") || "llava:latest";
+  });
+  const [ocrEnabled, setOcrEnabled] = useState(() => {
+    return localStorage.getItem("brightlens_ocr_enabled") === "true";
+  });
+
   const [selectedThemeName, setSelectedThemeName] = useState<ThemeName>(() => {
     const savedTheme = localStorage.getItem("brightlens_theme") as ThemeName | null;
     return savedTheme && savedTheme in THEMES ? savedTheme : "default";
   });
   const theme = THEMES[selectedThemeName];
 
-  // API key override states
+  // API key override states (loaded securely from IPC or fallback to local storage)
   const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem("brightlens_gemini_key") || "");
   const [openrouterKey, setOpenrouterKey] = useState(() => localStorage.getItem("brightlens_openrouter_key") || "");
   const [nvidiaKey, setNvidiaKey] = useState(() => localStorage.getItem("brightlens_nvidia_key") || "");
 
-  useEffect(() => { localStorage.setItem("brightlens_gemini_key", geminiKey); }, [geminiKey]);
-  useEffect(() => { localStorage.setItem("brightlens_openrouter_key", openrouterKey); }, [openrouterKey]);
-  useEffect(() => { localStorage.setItem("brightlens_nvidia_key", nvidiaKey); }, [nvidiaKey]);
+  // Dynamic Express backend port
+  const [apiPort, setApiPort] = useState(5000);
+  const apiBase = `http://localhost:${apiPort}`;
+
+  // Session states
+  const [activeSessionId, setActiveSessionId] = useState("");
+  const [sessionsList, setSessionsList] = useState<Array<{ sessionId: string, question: string, timestamp: string }>>([]);
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -128,6 +144,89 @@ function App() {
   const autoScrollRef = useRef(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Fetch session list
+  const fetchSessions = useCallback(async (port = apiPort) => {
+    try {
+      const res = await axios.get(`http://localhost:${port}/api/sessions`);
+      setSessionsList(res.data?.sessions || []);
+    } catch (err) {
+      console.error("Failed to load sessions:", err);
+    }
+  }, [apiPort]);
+
+  // Fetch current session history
+  const fetchHistory = useCallback(async (port = apiPort) => {
+    try {
+      const res = await axios.get(`http://localhost:${port}/api/history`);
+      const historyList = res.data?.history || [];
+      const mapped: Message[] = [];
+      for (const h of historyList) {
+        mapped.push({ role: "user", content: h.question });
+        mapped.push({ role: "assistant", content: h.answer });
+      }
+      setMessages(mapped);
+    } catch (err) {
+      console.error("Failed to load history:", err);
+    }
+  }, [apiPort]);
+
+  // Expose backend port and load secure credentials
+  useEffect(() => {
+    window.electronAPI?.getBackendPort?.().then((port: number) => {
+      const activePort = port || 5000;
+      setApiPort(activePort);
+      
+      // Load active session and history
+      axios.get(`http://localhost:${activePort}/api/sessions/active`)
+        .then(res => {
+          setActiveSessionId(res.data.sessionId);
+        })
+        .catch(err => console.error("Active session fetch failed:", err));
+        
+      fetchSessions(activePort);
+    });
+
+    if (window.electronAPI?.getSecureKeys) {
+      window.electronAPI.getSecureKeys().then((keys) => {
+        if (keys.gemini) setGeminiKey(keys.gemini);
+        if (keys.openrouter) setOpenrouterKey(keys.openrouter);
+        if (keys.nvidia) setNvidiaKey(keys.nvidia);
+      });
+    }
+  }, [fetchSessions]);
+
+  // Save secure credentials when updated
+  useEffect(() => {
+    if (window.electronAPI?.saveSecureKeys) {
+      window.electronAPI.saveSecureKeys({
+        gemini: geminiKey,
+        openrouter: openrouterKey,
+        nvidia: nvidiaKey
+      });
+    } else {
+      localStorage.setItem("brightlens_gemini_key", geminiKey);
+      localStorage.setItem("brightlens_openrouter_key", openrouterKey);
+      localStorage.setItem("brightlens_nvidia_key", nvidiaKey);
+    }
+  }, [geminiKey, openrouterKey, nvidiaKey]);
+
+  useEffect(() => {
+    if (activeSessionId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchHistory(apiPort);
+    }
+  }, [activeSessionId, fetchHistory, apiPort]);
+
+  useEffect(() => {
+    localStorage.setItem("brightlens_offline_text", offlineTextModel);
+  }, [offlineTextModel]);
+  useEffect(() => {
+    localStorage.setItem("brightlens_offline_vision", offlineVisionModel);
+  }, [offlineVisionModel]);
+  useEffect(() => {
+    localStorage.setItem("brightlens_ocr_enabled", String(ocrEnabled));
+  }, [ocrEnabled]);
 
   // Keep refs in sync so Electron closure always has latest values
   useEffect(() => { questionTextRef.current = questionText; }, [questionText]);
@@ -157,7 +256,6 @@ function App() {
   // ── Auto-scroll logic ──────────────────────────────────────────────────────
   useEffect(() => {
     const handleScroll = () => {
-      // If we are within 50px of the bottom, enable auto-scroll, else disable it
       const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
       if (scrollHeight - (scrollTop + clientHeight) < 50) {
         autoScrollRef.current = true;
@@ -173,7 +271,7 @@ function App() {
     if (loading && autoScrollRef.current && bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "auto" });
     }
-  }, [response, loading]);
+  }, [messages, loading]);
 
   const stopGeneration = useCallback((e?: React.MouseEvent) => {
     e?.preventDefault();
@@ -193,7 +291,7 @@ function App() {
       setError("");
       const formData = new FormData();
       formData.append("audio", audioBlob, "speech.webm");
-      const res = await axios.post(`${API_BASE}/speech`, formData);
+      const res = await axios.post(`${apiBase}/speech`, formData);
       const transcribed = res.data?.text || "";
       if (transcribed) {
         setQuestionText(prev => prev.trim() ? `${prev.trim()} ${transcribed}` : transcribed);
@@ -206,7 +304,7 @@ function App() {
     } finally {
       setSpeechLoading(false);
     }
-  }, []);
+  }, [apiBase]);
 
   // ── Recording ──────────────────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
@@ -257,22 +355,43 @@ function App() {
     try {
       setLoading(true);
       setError("");
-      setResponse("");
-      setImage(null);
-      setSubmittedQuestion(q);
       setQuestionText(""); // Clear input area
       autoScrollRef.current = true; // reset to true on new request
       const currentMode = modesRef.current.find(m => m.name === selectedModeNameRef.current);
       
+      // Append user message immediately
+      setMessages(prev => [...prev, { role: "user", content: q }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
       await streamAnalyze(
-        { prompt: q, mode: imageModeRef.current, systemPrompt: currentMode?.systemPrompt, onlineVisionModel: onlineVisionModelRef.current },
-        (token) => setResponse(prev => prev + token),
+        apiBase,
+        { 
+          prompt: q, 
+          mode: imageModeRef.current, 
+          systemPrompt: currentMode?.systemPrompt, 
+          onlineVisionModel: onlineVisionModelRef.current,
+          offlineTextModel,
+          offlineVisionModel
+        },
+        (token) => {
+          setMessages(prev => {
+            const next = [...prev];
+            if (next.length > 0) {
+              const last = next[next.length - 1];
+              if (last.role === "assistant") {
+                last.content += token;
+              }
+            }
+            return next;
+          });
+        },
         controller.signal,
         { geminiKey, openrouterKey, nvidiaKey }
       );
+      fetchSessions(apiPort);
     } catch (err: unknown) {
       if ((err as Error).name === "AbortError") {
         console.log("Generation stopped by user");
@@ -293,6 +412,47 @@ function App() {
     e.target.value = "";
   };
 
+  // ── Session utilities ──────────────────────────────────────────────────────
+  const handleClearChat = async () => {
+    try {
+      const res = await axios.post(`${apiBase}/api/sessions/new`);
+      setActiveSessionId(res.data.sessionId);
+      setMessages([]);
+      setImage(null);
+      setError("");
+      fetchSessions(apiPort);
+    } catch {
+      setError("Failed to start new session");
+    }
+  };
+
+  const handleSelectSession = async (sessionId: string) => {
+    try {
+      await axios.post(`${apiBase}/api/sessions/active`, { sessionId });
+      setActiveSessionId(sessionId);
+      setShowHistoryDrawer(false);
+      setImage(null);
+      setError("");
+    } catch {
+      setError("Failed to load session");
+    }
+  };
+
+  const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await axios.delete(`${apiBase}/api/sessions/${sessionId}`);
+      fetchSessions(apiPort);
+      if (sessionId === activeSessionId) {
+        const res = await axios.get(`${apiBase}/api/sessions/active`);
+        setActiveSessionId(res.data.sessionId);
+      }
+    } catch {
+      setError("Failed to delete session");
+    }
+  };
+
   // ── Electron screen capture ────────────────────────────────────────────────
   useEffect(() => {
     const electronAPI = window.electronAPI;
@@ -305,7 +465,6 @@ function App() {
       try {
         setLoading(true);
         setError("");
-        setResponse("");
 
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
@@ -328,12 +487,33 @@ function App() {
         const base64 = canvas.toDataURL("image/jpeg", 0.8);
         setImage(base64);
 
+        let ocrText = "";
+        if (ocrEnabled) {
+          try {
+            const { createWorker } = await import("tesseract.js");
+            const worker = await createWorker('eng');
+            const ret = await worker.recognize(canvas);
+            ocrText = ret.data.text;
+            await worker.terminate();
+          } catch (ocrErr) {
+            console.error("Local OCR failed:", ocrErr);
+          }
+        }
+
         const q = questionTextRef.current.trim();
-        const prompt = q
+        let prompt = q
           ? `Answer the user's question using the screenshot as context. Question: ${q}`
           : "Explain what's on screen in simple steps";
-        setSubmittedQuestion(q || "Explain what's on screen in simple steps");
-          
+
+        if (ocrText.trim()) {
+          prompt += `\n\n[OCR Extracted Text from screen for reference]:\n${ocrText}`;
+        }
+
+        const userQ = q || "Explain what's on screen in simple steps";
+        
+        // Push user message immediately
+        setMessages(prev => [...prev, { role: "user", content: userQ }]);
+        setMessages(prev => [...prev, { role: "assistant", content: "" }]);
         setQuestionText(""); // Clear input area
 
         const currentMode = modesRef.current.find(m => m.name === selectedModeNameRef.current);
@@ -343,11 +523,32 @@ function App() {
         abortControllerRef.current = controller;
 
         await streamAnalyze(
-          { image: base64, prompt, mode: imageModeRef.current, systemPrompt: currentMode?.systemPrompt, onlineVisionModel: onlineVisionModelRef.current },
-          (token) => setResponse(prev => prev + token),
+          apiBase,
+          { 
+            image: base64, 
+            prompt, 
+            mode: imageModeRef.current, 
+            systemPrompt: currentMode?.systemPrompt, 
+            onlineVisionModel: onlineVisionModelRef.current,
+            offlineTextModel,
+            offlineVisionModel
+          },
+          (token) => {
+            setMessages(prev => {
+              const next = [...prev];
+              if (next.length > 0) {
+                const last = next[next.length - 1];
+                if (last.role === "assistant") {
+                  last.content += token;
+                }
+              }
+              return next;
+            });
+          },
           controller.signal,
           keysRef.current
         );
+        fetchSessions(apiPort);
       } catch (err: unknown) {
         if ((err as Error).name === "AbortError") {
           console.log("Generation stopped by user");
@@ -403,7 +604,7 @@ function App() {
       streamRef.current?.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     };
-  }, [startRecording, stopRecording]);
+  }, [startRecording, stopRecording, apiBase, apiPort, ocrEnabled, fetchSessions, offlineTextModel, offlineVisionModel]);
 
   // ── UI ────────────────────────────────────────────────────────────────────
   return (
@@ -423,7 +624,7 @@ function App() {
         borderRadius: "24px", backgroundColor: theme.panel,
         backdropFilter: "blur(30px)", border: theme.border,
         boxShadow: theme.shadow, overflow: "hidden",
-        WebkitAppRegion: "no-drag"
+        WebkitAppRegion: "no-drag", position: "relative"
       } as React.CSSProperties}>
 
         {/* Sleek Vision Segmented Control */}
@@ -438,14 +639,13 @@ function App() {
           theme={theme}
           loading={loading}
           speechLoading={speechLoading}
-          response={response}
-          submittedQuestion={submittedQuestion}
+          messages={messages}
           image={image}
           bottomRef={bottomRef}
         />
 
         {/* Spacer if empty to push input to bottom */}
-        {!response && !loading && !speechLoading && <div style={{ flex: 1 }} />}
+        {messages.length === 0 && !loading && !speechLoading && <div style={{ flex: 1 }} />}
 
         {/* Input Area */}
         <InputArea 
@@ -464,9 +664,9 @@ function App() {
           handleAskText={handleAskText}
           stopGeneration={stopGeneration}
           setShowSettings={setShowSettings}
-          response={response}
-          submittedQuestion={submittedQuestion}
-          setImage={setImage}
+          hasMessages={messages.length > 0}
+          handleClearChat={handleClearChat}
+          toggleHistoryDrawer={() => setShowHistoryDrawer(!showHistoryDrawer)}
           setError={setError}
         />
 
@@ -503,6 +703,12 @@ function App() {
           setSelectedThemeName={setSelectedThemeName}
           onlineVisionModel={onlineVisionModel}
           setOnlineVisionModel={setOnlineVisionModel}
+          offlineTextModel={offlineTextModel}
+          setOfflineTextModel={setOfflineTextModel}
+          offlineVisionModel={offlineVisionModel}
+          setOfflineVisionModel={setOfflineVisionModel}
+          ocrEnabled={ocrEnabled}
+          setOcrEnabled={setOcrEnabled}
           setShowSettings={setShowSettings}
           geminiKey={geminiKey}
           setGeminiKey={setGeminiKey}
@@ -510,7 +716,94 @@ function App() {
           setOpenrouterKey={setOpenrouterKey}
           nvidiaKey={nvidiaKey}
           setNvidiaKey={setNvidiaKey}
+          apiBase={apiBase}
         />
+      )}
+
+      {/* History Drawer Overlay */}
+      {showHistoryDrawer && (
+        <div 
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="history-drawer-title"
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: theme.overlay, zIndex: 90, backdropFilter: "blur(4px)",
+            display: "flex", justifyContent: "flex-start", WebkitAppRegion: "no-drag"
+          } as React.CSSProperties}
+          onClick={() => setShowHistoryDrawer(false)}
+        >
+          <div 
+            style={{
+              width: "280px", height: "100%", backgroundColor: theme.modal,
+              borderRight: theme.border, display: "flex", flexDirection: "column",
+              boxShadow: theme.shadow, padding: "20px 16px", boxSizing: "border-box",
+              gap: "16px", animation: "slideIn 0.25s ease-out"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 id="history-drawer-title" style={{ fontSize: "16px", margin: 0, color: theme.heading, fontWeight: 600 }}>Sessions History</h3>
+              <button 
+                onClick={() => setShowHistoryDrawer(false)}
+                style={{ background: "transparent", border: "none", color: theme.textMuted, cursor: "pointer", fontSize: "16px" }}
+              >✕</button>
+            </div>
+
+            <button
+              onClick={() => { handleClearChat(); setShowHistoryDrawer(false); }}
+              style={{
+                width: "100%", padding: "10px", borderRadius: "8px", border: "none",
+                backgroundColor: theme.accent, color: "white", cursor: "pointer",
+                fontWeight: 500, fontSize: "13px", display: "flex", alignItems: "center",
+                justifyContent: "center", gap: "6px", boxShadow: theme.accentGlow
+              }}
+            >
+              <span>+</span> New Chat
+            </button>
+
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
+              {sessionsList.length === 0 ? (
+                <div style={{ fontSize: "12px", color: theme.textSubtle, textAlign: "center", marginTop: "20px" }}>No past sessions found</div>
+              ) : (
+                sessionsList.map(s => {
+                  const isActive = s.sessionId === activeSessionId;
+                  const title = s.question?.substring(0, 30) + (s.question?.length > 30 ? "..." : "") || "Untitled Session";
+                  return (
+                    <div
+                      key={s.sessionId}
+                      onClick={() => handleSelectSession(s.sessionId)}
+                      style={{
+                        padding: "10px 12px", borderRadius: "8px",
+                        backgroundColor: isActive ? theme.accentSoft : theme.input,
+                        border: isActive ? `1px solid ${theme.accent}` : theme.borderSoft,
+                        cursor: "pointer", display: "flex", justifyContent: "space-between",
+                        alignItems: "center", gap: "8px", transition: "all 0.2s"
+                      }}
+                      onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = theme.buttonHover; }}
+                      onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = theme.input; }}
+                    >
+                      <span style={{
+                        fontSize: "12px", color: isActive ? theme.accentText : theme.text,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1
+                      }}>{title}</span>
+                      <button
+                        onClick={(e) => handleDeleteSession(e, s.sessionId)}
+                        title="Delete session"
+                        style={{
+                          background: "transparent", border: "none",
+                          color: theme.dangerText, cursor: "pointer", fontSize: "11px", padding: "2px"
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Animations */}
@@ -518,6 +811,10 @@ function App() {
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes spin { 100% { transform: rotate(360deg); } }
         @keyframes thinkingShimmer { 0% { background-position: 200% center; } 100% { background-position: -200% center; } }
+        @keyframes slideIn {
+          from { transform: translateX(-100%); }
+          to { transform: translateX(0); }
+        }
         .thinking-shimmer {
           color: transparent;
           background: linear-gradient(90deg, ${theme.textSubtle}, ${theme.accentText}, ${theme.text}, ${theme.accentText}, ${theme.textSubtle});

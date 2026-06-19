@@ -6,10 +6,11 @@ const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const helmet = require("helmet");
+const axios = require("axios");
 const { z } = require("zod");
 const { analyze, analyzeStream } = require("./aiRouter.cjs");
 const { speechToText } = require("./speech.cjs");
-const { save, getSessionHistory } = require("./db.cjs");
+const { save, getSessionHistory, listSessions, deleteSession, startNewSession, setActiveSession, getActiveSession } = require("./db.cjs");
 
 const app = express();
 app.use(helmet());
@@ -52,7 +53,9 @@ const analyzeSchema = z.object({
   prompt: z.string().min(1, "Prompt cannot be empty").max(10000, "Prompt must be less than 10000 characters"),
   mode: z.enum(["online", "offline"]).default("online"),
   systemPrompt: z.string().max(2000, "System prompt must be less than 2000 characters").nullable().optional(),
-  onlineVisionModel: z.enum(["gemini", "nvidia"]).optional()
+  onlineVisionModel: z.enum(["gemini", "nvidia"]).optional(),
+  offlineTextModel: z.string().max(200).optional(),
+  offlineVisionModel: z.string().max(200).optional()
 });
 
 function sanitizeSystemPrompt(prompt) {
@@ -118,7 +121,7 @@ app.post("/analyze-stream", async (req, res) => {
       return res.status(400).json({ error: errorMsg });
     }
 
-    const { image, prompt, mode, systemPrompt, onlineVisionModel } = parsed.data;
+    const { image, prompt, mode, systemPrompt, onlineVisionModel, offlineTextModel, offlineVisionModel } = parsed.data;
     const sanitizedSystemPrompt = sanitizeSystemPrompt(systemPrompt);
 
     if (!image && !prompt) {
@@ -139,7 +142,16 @@ app.post("/analyze-stream", async (req, res) => {
 
     const fullPrompt = historyPrefix + prompt;
 
-    const fullText = await analyzeStream(image, fullPrompt, mode, sanitizedSystemPrompt, onlineVisionModel, res, keys);
+    const fullText = await analyzeStream(
+      image,
+      fullPrompt,
+      mode,
+      sanitizedSystemPrompt,
+      onlineVisionModel,
+      res,
+      keys,
+      { offlineTextModel, offlineVisionModel }
+    );
 
     if (fullText) {
       // Save prompt to DB after stream completes
@@ -151,6 +163,71 @@ app.post("/analyze-stream", async (req, res) => {
       const statusCode = error.statusCode || 500;
       res.status(statusCode).json({ error: error.message || "Streaming failed." });
     }
+  }
+});
+
+// GET /api/sessions
+app.get("/api/sessions", async (req, res) => {
+  try {
+    const list = await listSessions();
+    res.json({ sessions: list });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/history
+app.get("/api/history", async (req, res) => {
+  try {
+    const history = await getSessionHistory(100);
+    res.json({ history });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/sessions/active
+app.get("/api/sessions/active", (req, res) => {
+  res.json({ sessionId: getActiveSession() });
+});
+
+// POST /api/sessions/active
+app.post("/api/sessions/active", (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ error: "Missing sessionId" });
+  }
+  setActiveSession(sessionId);
+  res.json({ sessionId });
+});
+
+// POST /api/sessions/new
+app.post("/api/sessions/new", (req, res) => {
+  const newId = startNewSession();
+  res.json({ sessionId: newId });
+});
+
+// DELETE /api/sessions/:sessionId
+app.delete("/api/sessions/:sessionId", async (req, res) => {
+  try {
+    const success = await deleteSession(req.params.sessionId);
+    if (req.params.sessionId === getActiveSession()) {
+      startNewSession();
+    }
+    res.json({ success });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Proxy for Ollama models listing and connection status
+app.get("/api/ollama/models", async (req, res) => {
+  const ollamaBase = process.env.OLLAMA_BASE || "http://127.0.0.1:11434";
+  try {
+    const axiosRes = await axios.get(`${ollamaBase}/api/tags`, { timeout: 3000 });
+    res.json({ online: true, models: axiosRes.data?.models || [] });
+  } catch (error) {
+    res.json({ online: false, models: [] });
   }
 });
 
@@ -186,20 +263,48 @@ app.post("/speech", upload.single("audio"), async (req, res) => {
 });
 
 // ── Graceful shutdown ──────────────────────────────────────────────────────────
-const server = app.listen(5000, '127.0.0.1', () => console.log("Server running on 127.0.0.1:5000"));
+let server;
+
+function startServer(startPort) {
+  server = app.listen(startPort, '127.0.0.1', () => {
+    console.log(`Server running on 127.0.0.1:${startPort}`);
+    if (process.send) {
+      process.send({ port: startPort });
+    }
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`Port ${startPort} in use, trying ${startPort + 1}...`);
+      startServer(startPort + 1);
+    } else {
+      console.error("Server error:", err);
+    }
+  });
+}
+
+startServer(5000);
 
 process.on('SIGTERM', () => {
   console.log('SIGTERM received. Shutting down gracefully...');
-  server.close(() => {
-    console.log('Server closed.');
+  if (server) {
+    server.close(() => {
+      console.log('Server closed.');
+      process.exit(0);
+    });
+  } else {
     process.exit(0);
-  });
+  }
 });
 
 process.on('SIGINT', () => {
   console.log('SIGINT received. Shutting down gracefully...');
-  server.close(() => {
-    console.log('Server closed.');
+  if (server) {
+    server.close(() => {
+      console.log('Server closed.');
+      process.exit(0);
+    });
+  } else {
     process.exit(0);
-  });
+  }
 });

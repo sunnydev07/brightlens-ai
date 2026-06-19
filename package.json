@@ -10,7 +10,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test tests/theme-selector.test.cjs tests/validation.test.cjs tests/api-keys.test.cjs tests/accessibility-compression.test.cjs"
+    "test": "node --test tests/theme-selector.test.cjs tests/validation.test.cjs tests/api-keys.test.cjs tests/accessibility-compression.test.cjs tests/secure-keys.test.cjs tests/sessions.test.cjs"
   },
   "dependencies": {
     "axios": "^1.15.0",
@@ -25,6 +25,7 @@
     "react-markdown": "^10.1.0",
     "sqlite3": "^6.0.1",
     "tailwindcss": "^4.2.2",
+    "tesseract.js": "^7.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
