@@ -1,6 +1,10 @@
 {
   "name": "brightlens",
   "description": "Desktop AI vision assistant built with Electron, React, and Express.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sunnydev07/brightlens-ai.git"
+  },
   "main": "electron/main.cjs",
   "private": true,
   "version": "0.1.0",
