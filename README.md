@@ -1,112 +1,91 @@
-<div align="center">
-  <img src="https://img.shields.io/badge/Status-Active-success.svg?style=for-the-badge" alt="Status Badge">
-</div>
+# 🔍 Brightlens AI — Context-Aware Visual AI Assistant
 
-# Brightlens AI
+[![Electron](https://img.shields.io/badge/Electron-Latest-47848F?style=flat-square&logo=electron)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React-19.0-blue?style=flat-square&logo=react)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?style=flat-square&logo=vite)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.0-38bdf8?style=flat-square&logo=tailwind-css)](https://tailwindcss.com/)
 
-**Brightlens AI** is an advanced, context-aware AI desktop application that bridges the gap between powerful cloud LLMs (Google Gemini, NVIDIA, and OpenRouter) and robust local inference (Ollama - Llama 3.2 & LlaVA). Built natively on Electron with a stunning glassmorphism React/Vite interface, Brightlens acts as your personalized, visual digital brain right on your desktop.
-
-## ✨ Features
-
-- 🖥️ **Smart Screen Context**: Quickly capture anything on your screen using the global hotkey (`Ctrl + Shift + S` or `Cmd + Shift + S`) and ask the AI questions directly about your visual workspace.
-- 🧠 **Hybrid Model Routing**:
-  - **Online Mode**: Ultrafast generation using Google Gemini, NVIDIA API, or OpenRouter.
-  - **Offline Mode**: Fully local privacy-centric generation utilizing Ollama (Llama 3.2 text and LlaVA/Qwen vision models).
-- 🔄 **Vision Model Switcher**: Seamlessly toggle between leading online vision models: **Google Gemini Vision** and **NVIDIA Phi-4 Multimodal** (`microsoft/phi-4-multimodal-instruct`) via a sleek Settings interface.
-- ⚡ **Upgraded Text Engine**: Out-of-the-box support for cutting-edge online models like OpenRouter's **NVIDIA Nemotron 30B** (`nvidia/nemotron-3-nano-30b-a3b:free`) for exceptionally fast and accurate text queries.
-- 🎨 **Sleek Theme Selector**: Easily switch between beautifully curated UI themes inside the settings modal to perfectly match your desktop workspace.
-- 🎙️ **Voice Transcription**: Record audio inputs directly into the application with smart push-to-talk capability.
-- 💾 **Persistent Session Memory**: Your chat context is efficiently preserved and passed down to each subsequent question using a lightweight, built-in SQLite database—allowing you to continue sessions exactly where you left off.
-- 🎨 **Dynamic Glassmorphism UI**: Frameless, elegant transparent design that merges perfectly into modern OS aesthetics, complete with a compact "thinking" loader and streamlined screen-capture previews.
-- 🎛️ **Customized Personas (Modes)**: Create and save specialized behaviors tailored via custom system prompts to change how Brightlens responds.
+**Brightlens AI** is a local-first desktop study and productivity assistant. Built with Electron, Express, Ollama, and SQLite, it allows you to capture any area of your screen with a single hotkey (`Ctrl + Shift + S`) and receive instant, step-by-step visual AI explanations and tutor guidance.
 
 ---
 
-## 🚀 Getting Started
+## ✨ Highlights
 
-### Prerequisites
-
-To fully utilize both cloud and local options, ensure you have:
-1. **Node.js** (v18+)
-2. **Ollama** installed running locally on `http://127.0.0.1:11434`
-   - Pull the required local models from your terminal: 
-     ```bash
-     ollama run llama3.2
-     ollama run llava
-     ```
-
-### Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/sunnydev07/brightlens-ai.git
-   cd brightlens-ai
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Environment Setup:**
-   Create a `.env` file at the root of the project with your API credentials:
-   ```env
-   # Google Gemini API
-   GEMINI_API_KEY=your_gemini_api_key_here
-   GEMINI_MODEL=gemini-3-flash-preview
-
-   # Local Ollama Config
-   OLLAMA_BASE=http://127.0.0.1:11434
-   OLLAMA_MODEL=llama3.2:latest
-   OLLAMA_VISION_MODEL=llava:latest
-
-   # OpenRouter config (online text generation)
-   OPENROUTER_API_KEY=your_openrouter_api_key_here
-   OPENROUTER_MODEL=nvidia/nemotron-3-nano-30b-a3b:free
-
-   # NVIDIA config (online vision generation)
-   NVIDIA_API_KEY=your_nvidia_api_key_here
-   ```
-
-### Running the App
-
-Brightlens operates securely by separating the internal server logic from the rendering process. You need to start both concurrently.
-
-1. **Start the backend AI router:**
-   ```bash
-   npm run server
-   ```
-   *Runs the Express / SQLite server on port 5000.*
-
-2. **Launch the Electron UI:**
-   Open a new terminal in the same directory and execute:
-   ```bash
-   npm run dev
-   ```
-   *This starts Vite and connects it seamlessly inside the Electron window wrapper.*
+- 📸 **Global Screen Capture**: Press `Ctrl + Shift + S` (`Cmd + Shift + S` on Mac) anywhere on your OS to instantly snapshot and query visual context.
+- 🧠 **Hybrid Cloud & Local AI**:
+  - **Online**: Google Gemini Vision, NVIDIA NIMs (Phi-4 Multimodal), and OpenRouter (Nemotron 30B).
+  - **Offline / Local**: 100% private local inference powered by Ollama (Llama 3.2 & LlaVA).
+- 🎙️ **Push-to-Talk Voice Transcription**: Dictate queries directly into the assistant.
+- 💾 **Persistent Chat Memory**: Automatic SQLite session storage for uninterrupted context across sessions.
+- 🎨 **Glassmorphic Floating UI**: Minimalist, semi-transparent desktop overlay design.
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Architecture & Tech Stack
 
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS (Vanilla rendering setup), React-Markdown.
-- **Backend:** Node.js, Express, SQLite3 for persistent conversation routing.
-- **Desktop Wrapper:** Electron (IPC Main/Renderer)
-- **AI Integrations:** Google Generative AI (Gemini Flash), NVIDIA NIMs (Phi-4 Multimodal), OpenRouter (Nemotron 30B), Ollama Server
-- **Audio Processing:** MediaRecorder APIs parsed against localized TTS logic.
+```
+[ Electron Window ] <--- IPC ---> [ Express Server (Port 5000) ]
+                                            |
+                         +------------------+------------------+
+                         |                                     |
+                [ Cloud AI Routers ]                 [ Local Ollama ]
+            (Gemini / NVIDIA / OpenRouter)          (Llama 3.2 / LlaVA)
+                         |                                     |
+                         +------------------+------------------+
+                                            |
+                                  [ SQLite Storage ]
+```
+
+- **Desktop Shell**: Electron
+- **Frontend**: React 19, Vite, Tailwind CSS, TypeScript
+- **Backend & Memory**: Express.js, SQLite3
+- **AI Integrations**: Google Gemini, NVIDIA API, OpenRouter, Ollama
 
 ---
 
-## ⌨️ Controls & Hotkeys
+## 🚀 Quick Start
 
-- **Drag Window**: Click and drag from the very top header area.
-- **`Ctrl + Shift + S`** (`Cmd + Shift + S` on Mac): Take an active screenshot overlay to pass into text queries instantly.
+### 1. Prerequisites
+- **Node.js** (v18+)
+- *(Optional for Offline Mode)* **Ollama** installed on `http://127.0.0.1:11434`:
+  ```bash
+  ollama run llama3.2
+  ollama run llava
+  ```
 
-## 🤝 Contributing
+### 2. Installation
 
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/sunnydev07/brightlens-ai/issues). 
+```bash
+git clone https://github.com/sunnydev07/brightlens-ai.git
+cd brightlens-ai
+npm install
+```
+
+### 3. Environment Setup
+
+Create `.env` in the root directory:
+
+```env
+GEMINI_API_KEY=your_gemini_key
+OPENROUTER_API_KEY=your_openrouter_key
+NVIDIA_API_KEY=your_nvidia_key
+OLLAMA_BASE=http://127.0.0.1:11434
+```
+
+### 4. Running the App
+
+Start the backend router and desktop app:
+
+```bash
+# Terminal 1: Backend Router
+npm run server
+
+# Terminal 2: Electron Frontend
+npm run dev
+```
 
 ---
 
-*Handcrafted for modern, seamless productivity.*
-# Maintenance: 
+## 📄 License
+
+Distributed under the MIT License. Created by [Sunny Kumar Dev](https://github.com/sunnydev07).
