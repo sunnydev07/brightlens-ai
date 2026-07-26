@@ -48,3 +48,18 @@ export interface Mode {
   name: string;
   systemPrompt: string | null;
 }
+
+export interface ChatMessage {
+  id?: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  image?: string | null;
+  timestamp?: number;
+}
+
+export interface AppConfig {
+  theme: ThemeName;
+  model: string;
+  visionModel: string;
+  offlineMode: boolean;
+}
